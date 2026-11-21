@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Driving Berlin map</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='4' y='3.5' width='8' height='5' rx='2' fill='%23c0392b'/%3E%3Crect x='1' y='6' width='14' height='5.5' rx='2' fill='%23c0392b'/%3E%3Ccircle cx='4.5' cy='12' r='2' fill='%23222'/%3E%3Ccircle cx='11.5' cy='12' r='2' fill='%23222'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root { --bg: #fff; --fg: #1d232a; --muted: #5b6672; --line: #d5dbe1; --panel: rgba(255, 255, 255, 0.94);
+          --accent: #0b63c5; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #15191e; --fg: #e6ebf0; --muted: #9aa6b2; --line: #3a434d; --panel: rgba(24, 29, 35, 0.94); --accent: #6cb4ff; }
+  }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 14px/1.35 system-ui, sans-serif; }
+  #map { position: absolute; inset: 0; }
+  #panel { position: absolute; z-index: 1000; top: 10px; right: 10px; width: 330px; max-height: calc(100% - 40px);
+           overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+           padding: 10px 12px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15); box-sizing: border-box; }
+  #panel h1 { font-size: 15px; margin: 0 0 6px; }
+  #panel .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0; }
+  #panel select, #panel button { font: inherit; }
+  #panel table { border-collapse: collapse; width: 100%; margin: 6px 0; font-variant-numeric: tabular-nums; }
+  #panel td, #panel th { padding: 3px 4px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  #panel th { font-weight: 600; color: var(--muted); font-size: 12px; }
+  #panel td.km { white-space: nowrap; font-weight: 600; }
+  #panel .end { color: var(--muted); font-size: 12px; }
+  #panel .note { color: var(--muted); font-size: 12px; margin: 4px 0; }
+  #live { font-size: 12px; }
+  #live.on { color: #2b8a3e; }
+  #toggle { display: none; }
+  a { color: var(--accent); }
+  .lvl-label { background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 5px;
+               padding: 2px 6px; font: 12px system-ui, sans-serif; white-space: nowrap; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+  .lvl-label b { font-weight: 600; }
+  .tick { background: none; border: none; font: 600 11px system-ui, sans-serif; color: #111; white-space: nowrap;
+          text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff; }
+  .car { transition: transform 0.2s linear; }
+  .legend { background: var(--panel); color: var(--fg); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line);
+            font: 12px system-ui, sans-serif; line-height: 1.6; }
+  .legend i { display: inline-block; width: 14px; height: 10px; margin-right: 6px; vertical-align: middle; border: 1px solid #0003; }
+  .leaflet-popup-content { font: 13px system-ui, sans-serif; }
+  .leaflet-popup-content button { font: inherit; margin: 2px 4px 2px 0; }
+  .pixelated { image-rendering: pixelated; }
+  @media (max-width: 640px) {
+    #panel { top: auto; bottom: 22px; left: 8px; right: 8px; width: auto; max-height: 42vh; }
+    #panel.collapsed > :not(h1) { display: none; }
+    #toggle { display: inline; float: right; }
+    .legend { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="panel">
+  <h1>How far can you drive? <button id="toggle" title="show / hide">&#x2195;</button></h1>
+  <div class="row">
+    <span id="live">game not open</span>
+  </div>
+  <div class="row"><label><input type="checkbox" id="follow"> follow car</label>
+    <a id="playLink" href="index.html" target="berlinDriveGame">open the game</a></div>
+  <div id="dist"></div>
+  <div class="note">Distances run along the four compass directions to the level border (the glass wall).
+    Click the map for coordinates and &ldquo;drive here&rdquo;; click a point of interest for its own link.</div>
+  <div id="cov" class="note"></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+'use strict';
+// Overview map of the game level (racing/index.html; one level since 2026-11-19, the
+// small level `mitte` was retired). Reads levels/<name>/level.json,
+// tiles.json (streamed level: L1 tile footprints), map.json (street names at the ends),
+// eggs.json (points of interest, optional). Live car via BroadcastChannel('berlinDrive').
+const LEVELS = ['mitte_all'];
+const COLOR = { mitte_all: '#0b63c5' };
+const DIRS = [['north', 0, -1], ['east', 1, 0], ['south', 0, 1], ['west', -1, 0]];   // level frame: x = E, z = -N
+const MESH_GAP = 15;   // m of missing L1 coverage along a ray that count as "mesh ends"
+const dbg = window.mapDebug = { levels: {}, errors: [], live: null, ready: false };
+const $ = (id) => document.getElementById(id);
+const fmtKm = (m) => m >= 1000 ? (m / 1000).toFixed(1) + ' km' : Math.round(m) + ' m';
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+// ---- level frame <-> WGS84: the exact inverse of build_level.py / build_stream.py to_en():
+// en = R(lat0, lon0) . (ecef(lat, lon, 0) - ecef(lat0, lon0, 0)), x = e, z = -n (fixed point, < 1 mm)
+const WGS_A = 6378137.0, WGS_F = 1 / 298.257223563, WGS_E2 = WGS_F * (2 - WGS_F), D2R = Math.PI / 180;
+function ecef(lat, lon) {
+  const la = lat * D2R, lo = lon * D2R, N = WGS_A / Math.sqrt(1 - WGS_E2 * Math.sin(la) ** 2);
+  return [N * Math.cos(la) * Math.cos(lo), N * Math.cos(la) * Math.sin(lo), N * (1 - WGS_E2) * Math.sin(la)];
+}
+function makeFrame(origin) {
+  const lat0 = origin.lat, lon0 = origin.lon, o = ecef(lat0, lon0);
+  const sla = Math.sin(lat0 * D2R), cla = Math.cos(lat0 * D2R), slo = Math.sin(lon0 * D2R), clo = Math.cos(lon0 * D2R);
+  const toEn = (lat, lon) => {
+    const p = ecef(lat, lon), d0 = p[0] - o[0], d1 = p[1] - o[1], d2 = p[2] - o[2];
+    return [-slo * d0 + clo * d1, -sla * clo * d0 - sla * slo * d1 + cla * d2];
+  };
+  const kLon = 111320 * cla, kLat = 111132;
+  return {
+    toXZ(lat, lon) { const [e, n] = toEn(lat, lon); return { x: e, z: -n }; },
+    toLatLon(x, z) {
+      const E = x, Nn = -z;
+      let lon = lon0 + E / kLon, lat = lat0 + Nn / kLat;
+      for (let i = 0; i < 4; i++) { const [e, n] = toEn(lat, lon); lon += (E - e) / kLon; lat += (Nn - n) / kLat; }
+      return [lat, lon];
+    },
+  };
+}
+
+// ---- map ----
+const map = L.map('map', { zoomControl: true, preferCanvas: true }).setView([52.5175, 13.39], 14);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+}).addTo(map);
+map.attributionControl.addAttribution('3D mesh: Berlin Partner f&uuml;r Wirtschaft und Technologie GmbH');
+const layers = {
+  levels: L.layerGroup().addTo(map), coverage: L.layerGroup().addTo(map), dist: L.layerGroup().addTo(map),
+  marks: L.layerGroup().addTo(map), pois: L.layerGroup().addTo(map), car: L.layerGroup().addTo(map),
+};
+L.control.layers(null, {
+  'Levels (outline)': layers.levels, 'Tile coverage (L1)': layers.coverage, 'Distances': layers.dist,
+  'Spawn / pit': layers.marks, 'Points of interest': layers.pois, 'Car': layers.car,
+}, { collapsed: true, position: 'topleft' }).addTo(map);
+const legend = L.control({ position: 'bottomleft' });
+legend.onAdd = () => {
+  const d = L.DomUtil.create('div', 'legend');
+  d.innerHTML = `<i style="border:2px solid ${COLOR.mitte_all};background:none"></i>level border<br>
+    <i style="background:rgba(11,99,197,.22)"></i>finest mesh tiles (L1)<br>
+    <i style="background:rgba(240,140,0,.45)"></i>coarse mesh only<br>
+    <i style="background:rgba(224,49,49,.45)"></i>no mesh inside the border<br>
+    <span style="color:#2b8a3e">&#9679;</span> spawn &nbsp; <span style="color:#c2255c">&#9679;</span> pit &nbsp; <span>&#x27A4;</span> car
+    <div id="poiLegend"></div>`;
+  return d;
+};
+legend.addTo(map);
+
+const LV = {};   // name -> { level, frame, outline, tiles, cov, roads, places, eggs }
+let active = LEVELS[0];   // ?level= from old links is ignored
+
+async function getJson(url) {
+  const r = await fetch(url, { cache: 'no-store' });
+  if (!r.ok) throw new Error(url + ' ' + r.status);
+  return r.json();
+}
+
+function outlineLatLngs(lv) {
+  const e = lv.level.extent, f = lv.frame, pts = [], K = 24;
+  const edge = (x0, z0, x1, z1) => { for (let i = 0; i < K; i++) pts.push(f.toLatLon(x0 + (x1 - x0) * i / K, z0 + (z1 - z0) * i / K)); };
+  edge(e.minX, e.minZ, e.maxX, e.minZ); edge(e.maxX, e.minZ, e.maxX, e.maxZ);
+  edge(e.maxX, e.maxZ, e.minX, e.maxZ); edge(e.minX, e.maxZ, e.minX, e.minZ);
+  return pts;
+}
+
+function drawLevel(name) {
+  const lv = LV[name], ex = lv.level.extent, f = lv.frame;
+  const w = (ex.maxX - ex.minX) / 1000, h = (ex.maxZ - ex.minZ) / 1000;
+  const poly = L.polygon(outlineLatLngs(lv), { color: COLOR[name], weight: 2.5, fill: name === active, fillOpacity: 0.04, interactive: false });
+  layers.levels.addLayer(poly);
+  lv.poly = poly;
+  const nw = f.toLatLon(ex.minX, ex.minZ);
+  const html = `<b>${esc(name)}</b> ${w.toFixed(1)} &times; ${h.toFixed(1)} km &middot; <a href="index.html" target="berlinDriveGame">play</a>`;
+  layers.levels.addLayer(L.marker(nw, { icon: L.divIcon({ className: '', html: `<div class="lvl-label" style="border-color:${COLOR[name]}">${html}</div>`, iconSize: null, iconAnchor: [0, 26] }), keyboard: false }));
+  const sp = f.toLatLon(lv.level.spawn.x, lv.level.spawn.z);
+  layers.marks.addLayer(L.circleMarker(sp, { radius: 6, color: '#fff', weight: 2, fillColor: '#2b8a3e', fillOpacity: 1 })
+    .bindTooltip(`spawn ${esc(name)} (heading ${Math.round(lv.level.spawn.heading / D2R)}&deg;)`));
+  const pits = lv.level.pit?.pits || [];
+  pits.forEach((p, k) => {
+    const ll = p.p.map(([x, z]) => f.toLatLon(x, z));
+    layers.marks.addLayer(L.polygon(ll, { color: '#c2255c', weight: 2, fillOpacity: 0.3 })
+      .bindTooltip(`${k === 0 || p.a > 1000 ? 'construction pit' : 'pit'}: ${p.a} m&sup2;, ${p.depth} m deep`));
+  });
+  dbg.levels[name] = {
+    sizeKm: [+w.toFixed(3), +h.toFixed(3)], bbox: lv.level.bbox,
+    corners: { sw: f.toLatLon(ex.minX, ex.maxZ), ne: f.toLatLon(ex.maxX, ex.minZ) },
+    spawn: sp, pits: pits.map((p) => ({ a: p.a, latlon: f.toLatLon(p.x, p.z), listed: [p.lat, p.lon] })),
+  };
+}
+
+// ---- tile coverage (streamed level): L1 tile footprints from tiles.json. A row holds the
+// box centre (cx, cy, cz) and the circumsphere radius r; the boxes are flat and ENU-aligned,
+// so the footprint is a square of half side r / sqrt(2) (checked against the real boxes: 1.41 r median width).
+const COV_CELL = 5;
+function buildCoverage(lv) {
+  const rows = lv.tiles.tiles, ex = lv.level.extent, s2 = Math.SQRT1_2;
+  let x0 = ex.minX, x1 = ex.maxX, z0 = ex.minZ, z1 = ex.maxZ;
+  for (const r of rows) if (r[1] === 1 || r[r.length - 1] === 1) {
+    const hs = r[6] * s2; x0 = Math.min(x0, r[3] - hs); x1 = Math.max(x1, r[3] + hs); z0 = Math.min(z0, r[5] - hs); z1 = Math.max(z1, r[5] + hs);
+  }
+  const nx = Math.ceil((x1 - x0) / COV_CELL), nz = Math.ceil((z1 - z0) / COV_CELL);
+  const g = new Uint8Array(nx * nz);   // 0 none, 1 coarse leaf only, 2 L1
+  const fill = (r, v) => {
+    const hs = r[6] * s2;
+    const i0 = Math.max(0, Math.floor((r[3] - hs - x0) / COV_CELL)), i1 = Math.min(nx, Math.ceil((r[3] + hs - x0) / COV_CELL));
+    const j0 = Math.max(0, Math.floor((r[5] - hs - z0) / COV_CELL)), j1 = Math.min(nz, Math.ceil((r[5] + hs - z0) / COV_CELL));
+    for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) if (g[j * nx + i] < v) g[j * nx + i] = v;
+  };
+  let nL1 = 0, nCoarse = 0;
+  for (const r of rows) {
+    if (r[1] === 1) { fill(r, 2); nL1++; } else if (r[r.length - 1] === 1) { fill(r, 1); nCoarse++; }
+  }
+  const at = (x, z) => {
+    const i = Math.floor((x - x0) / COV_CELL), j = Math.floor((z - z0) / COV_CELL);
+    return i < 0 || j < 0 || i >= nx || j >= nz ? 0 : g[j * nx + i];
+  };
+  // statistics inside the level border
+  let inside = 0, l1 = 0, coarse = 0;
+  for (let z = ex.minZ + COV_CELL / 2; z < ex.maxZ; z += COV_CELL) for (let x = ex.minX + COV_CELL / 2; x < ex.maxX; x += COV_CELL) {
+    const v = at(x, z); inside++; if (v === 2) l1++; else if (v === 1) coarse++;
+  }
+  lv.cov = { at, x0, z0, x1, z1 };
+  dbg.levels[lv.level.name].coverage = { tilesL1: nL1, coarseLeaves: nCoarse, cellM: COV_CELL,
+    insideL1Pct: +(100 * l1 / inside).toFixed(2), coarseOnlyM2: coarse * COV_CELL ** 2, noMeshM2: (inside - l1 - coarse) * COV_CELL ** 2 };
+  // raster image in a lat/lon grid (each pixel looked up through the exact forward frame)
+  const f = lv.frame, c = [f.toLatLon(x0, z0), f.toLatLon(x1, z0), f.toLatLon(x0, z1), f.toLatLon(x1, z1)];
+  const S = Math.min(...c.map((p) => p[0])), N = Math.max(...c.map((p) => p[0]));
+  const W = Math.min(...c.map((p) => p[1])), E = Math.max(...c.map((p) => p[1]));
+  const lat0 = lv.level.origin.lat, pxDeg = COV_CELL / 111132;
+  const w = Math.ceil((E - W) * Math.cos(lat0 * D2R) / pxDeg), h = Math.ceil((N - S) / pxDeg);
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const ctx = cv.getContext('2d'), img = ctx.createImageData(w, h), d = img.data;
+  const inBox = (x, z) => x >= ex.minX && x <= ex.maxX && z >= ex.minZ && z <= ex.maxZ;
+  for (let j = 0; j < h; j++) {
+    const lat = N - (j + 0.5) * (N - S) / h;
+    for (let i = 0; i < w; i++) {
+      const p = f.toXZ(lat, W + (i + 0.5) * (E - W) / w), v = at(p.x, p.z), k = (j * w + i) * 4;
+      if (v === 2) { d[k] = 11; d[k + 1] = 99; d[k + 2] = 197; d[k + 3] = 56; }
+      else if (v === 1) { d[k] = 240; d[k + 1] = 140; d[k + 2] = 0; d[k + 3] = 115; }
+      else if (inBox(p.x, p.z)) { d[k] = 224; d[k + 1] = 49; d[k + 2] = 49; d[k + 3] = 115; }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  layers.coverage.addLayer(L.imageOverlay(cv.toDataURL(), [[S, W], [N, E]], { interactive: false, className: 'pixelated' }));
+  const cs = dbg.levels[lv.level.name].coverage;
+  $('cov').innerHTML = `Mesh tiles (${esc(lv.level.name)}): ${cs.tilesL1} finest L1 tiles cover ${cs.insideL1Pct}% of the level`
+    + (cs.coarseOnlyM2 ? `, coarse mesh only on ${fmtKm(Math.sqrt(cs.coarseOnlyM2))}&sup2;` : '')
+    + (cs.noMeshM2 ? `, <b>no mesh on ${(cs.noMeshM2 / 1e6).toFixed(3)} km&sup2;</b>` : ', no holes') + '.';
+}
+
+// ---- names: nearest named street (else place) from levels/<name>/map.json (minimap data) ----
+function prepNames(lv, m) {
+  const segs = [], minor = new Set(['footway', 'path', 'steps', 'cycleway', 'pedestrian', 'service', 'track', 'corridor']);
+  for (const [cls, ni, , xz] of m.roads || []) {
+    if (ni < 0) continue;
+    for (let i = 0; i + 3 < xz.length; i += 2) segs.push([xz[i], xz[i + 1], xz[i + 2], xz[i + 3], ni, minor.has(cls) ? 1 : 0]);
+  }
+  lv.names = { list: m.names || [], segs, places: m.places || [] };
+}
+function nameAt(lv, x, z) {
+  if (!lv.names) return '';
+  let best = null, bd = 120;   // m
+  for (const [ax, az, bx, bz, ni, minor] of lv.names.segs) {
+    const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz;
+    const t = L2 > 0 ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)) : 0;
+    const d = Math.hypot(ax + t * dx - x, az + t * dz - z) + minor * 40;
+    if (d < bd) { bd = d; best = ni; }
+  }
+  if (best != null) return lv.names.list[best];
+  let pb = null, pd = 500;
+  for (const [, nm, px, pz] of lv.names.places) { const d = Math.hypot(px - x, pz - z); if (d < pd) { pd = d; pb = nm; } }
+  return pb ? 'near ' + pb : '';
+}
+
+// ---- distances from a point to the border in the four compass directions ----
+function rays(lv, x, z) {
+  const ex = lv.level.extent;
+  return DIRS.map(([dir, dx, dz]) => {
+    const box = dx > 0 ? ex.maxX - x : dx < 0 ? x - ex.minX : dz > 0 ? ex.maxZ - z : z - ex.minZ;
+    let end = Math.max(0, box), meshEnd = null;
+    if (lv.cov) {   // first stretch of >= MESH_GAP m without L1 tiles
+      let gap = 0;
+      for (let s = 0; s <= box; s += COV_CELL) {
+        if (lv.cov.at(x + dx * s, z + dz * s) === 2) gap = 0;
+        else if ((gap += COV_CELL) >= MESH_GAP) { meshEnd = Math.max(0, s - gap); end = meshEnd; break; }
+      }
+    }
+    const ex2 = x + dx * end, ez = z + dz * end;
+    return { dir, m: +end.toFixed(1), border: +box.toFixed(1), meshEnd, end: { x: ex2, z: ez }, name: nameAt(lv, ex2, ez) };
+  });
+}
+
+function insideLevel(lv, x, z) { const e = lv.level.extent; return x >= e.minX && x <= e.maxX && z >= e.minZ && z <= e.maxZ; }
+
+let car = null;   // last live position { level, x, z, heading, speed, t }
+function renderDistances() {
+  const lv = LV[active];
+  if (!lv) return;
+  layers.dist.clearLayers();
+  const sp = lv.level.spawn, f = lv.frame;
+  const fromSpawn = rays(lv, sp.x, sp.z);
+  const liveHere = car && car.level === active && insideLevel(lv, car.x, car.z);
+  const fromCar = liveHere ? rays(lv, car.x, car.z) : null;
+  dbg.levels[active].rays = fromSpawn;
+  if (fromCar) dbg.levels[active].raysCar = fromCar;
+  const src = fromCar || fromSpawn, o = fromCar ? car : sp, o0 = f.toLatLon(o.x, o.z);
+  for (const r of src) {
+    const e = f.toLatLon(r.end.x, r.end.z);
+    layers.dist.addLayer(L.polyline([o0, e], { color: '#111', weight: 1.5, dashArray: '5 5', opacity: 0.75, interactive: false }));
+    layers.dist.addLayer(L.circleMarker(e, { radius: 3, color: '#111', weight: 1, fillColor: '#fff', fillOpacity: 1, interactive: false }));
+    const mid = f.toLatLon((o.x + r.end.x) / 2, (o.z + r.end.z) / 2);
+    layers.dist.addLayer(L.marker(mid, { interactive: false, keyboard: false,
+      icon: L.divIcon({ className: 'tick', html: fmtKm(r.m), iconSize: null, iconAnchor: r.dir === 'north' || r.dir === 'south' ? [-4, 6] : [14, 16] }) }));
+  }
+  const row = (r, c) => `<tr><td>${r.dir}</td><td class="km">${fmtKm(r.m)}</td>${c ? `<td class="km">${fmtKm(c.m)}</td>` : ''}
+    <td class="end">${esc((c || r).name || '')}${(c || r).meshEnd != null ? ' (mesh ends)' : ''}</td></tr>`;
+  $('dist').innerHTML = `<table><tr><th>to the edge</th><th>from spawn</th>${fromCar ? '<th>from car</th>' : ''}<th>what is there${fromCar ? ' (car)' : ''}</th></tr>
+    ${fromSpawn.map((r, k) => row(r, fromCar && fromCar[k])).join('')}</table>
+    <div class="note">${esc(active)}: ${dbg.levels[active].sizeKm[0].toFixed(1)} &times; ${dbg.levels[active].sizeKm[1].toFixed(1)} km.
+    Longest straight-line run from the spawn: ${fmtKm(Math.max(...fromSpawn.map((r) => r.m)))} ${fromSpawn.reduce((a, b) => (b.m > a.m ? b : a)).dir}.</div>`;
+  for (const n of LEVELS) LV[n]?.poly?.setStyle({ fill: n === active });
+}
+
+// ---- points of interest (levels/<name>/eggs.json, optional) ----
+const POI = { bear: ['#8d5524', 'bear'], ball: ['#f8f9fa', 'football'], goal: ['#2f9e44', 'goal'], pitch: ['#69db7c', 'pitch'] };
+// spot links (levels/<name>/spots.json from build_spots.py): index.html?spot=<slug> starts the car before the spot
+const SPOT_POI = { balloon: ['#e8590c', 'balloon'], nodrive: ['#495057', 'memorial'], sbahn: ['#2f9e44', 'S-Bahn door'],
+                   pit: ['#c2255c', 'construction pit'], tunnel: ['#364fc7', 'tunnel'], bridge: ['#1098ad', 'bridge'] };
+const spotHref = (slug) => new URL('index.html?spot=' + encodeURIComponent(slug), location.href).href;
+function spotHtml(sp) {
+  if (!sp) return '';
+  const href = spotHref(sp.slug);
+  return `<br><a href="${esc(href)}" target="berlinDriveGame" onclick="return goSpot(event, '${esc(sp.slug)}')">drive there</a>
+    <button onclick="copySpot(this, '${esc(sp.slug)}')">copy link</button>
+    <br><input readonly value="${esc(href)}" style="width:100%;font:11px monospace;box-sizing:border-box" onclick="this.select()">`;
+}
+window.copySpot = (btn, slug) => {
+  const href = spotHref(slug), done = () => { btn.textContent = 'copied'; setTimeout(() => { btn.textContent = 'copy link'; }, 1500); };
+  const fallback = () => { const i = btn.parentElement.querySelector('input'); i?.select(); try { if (document.execCommand('copy')) done(); } catch { /* selected: Ctrl+C */ } };
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(href).then(done, fallback); else fallback();
+};
+// game open: move the car there (same start pose); else the link opens the game at the spot
+window.goSpot = (ev, slug) => {
+  for (const n of LEVELS) {
+    const sp = (LV[n]?.spots || []).find((q) => q.slug === slug);
+    if (sp && gameLive()) { ev.preventDefault(); send({ type: 'teleport', level: n, x: sp.start.x, z: sp.start.z, heading: sp.start.heading }); map.closePopup(); return false; }
+  }
+  return true;
+};
+const foundIds = () => { try { return new Set(JSON.parse(localStorage.getItem('berlinDrive.eggs.found') || '[]')); } catch { return new Set(); } };
+let poiFound = '';
+// the spot of an eggs.json item: bears / pitches by id, goals and the ball by their pitch
+const spotFor = (lv, it) => (lv.spots || []).find((sp) => sp.ref && (sp.ref === it.id || sp.ref === it.pitch));
+function renderPois() {
+  const found = foundIds(), kinds = new Set();
+  poiFound = [...found].sort().join(',');
+  layers.pois.clearLayers();
+  let total = 0, bears = 0, bearsFound = 0;
+  for (const n of LEVELS) {
+    const lv = LV[n];
+    for (const it of lv?.eggs || []) {
+      let ll = isFinite(it.lat) && isFinite(it.lon) ? [it.lat, it.lon] : isFinite(it.x) && isFinite(it.z) ? lv.frame.toLatLon(it.x, it.z) : null;
+      if (!ll) continue;
+      const [col, label] = POI[it.kind] || ['#7048e8', it.kind || 'item'];
+      const isBear = it.kind === 'bear', got = isBear && found.has(it.id);
+      kinds.add(it.kind);
+      total++; if (isBear) { bears++; if (got) bearsFound++; }
+      layers.pois.addLayer(L.circleMarker(ll, { radius: isBear ? 7 : 6, color: got ? '#2b8a3e' : '#222', weight: got ? 3 : 1.5,
+        fillColor: got ? '#adb5bd' : col, fillOpacity: 0.95 })
+        .bindTooltip(`${esc(it.name || label)}${isBear ? (got ? ' &#10003; found' : ' &ndash; not found yet') : ''}<br><span style="color:#666">${esc(label)} &middot; ${esc(n)}</span>`)
+        .bindPopup(() => `<b>${esc(it.name || label)}</b> <span style="color:#666">${esc(label)}</span>` + (spotHtml(spotFor(lv, it)) || '<br><span style="color:#666">no spot link</span>')));
+    }
+    for (const sp of lv?.spots || []) {   // spots without an eggs.json item: balloon, memorial, S-Bahn, pits, tunnels, bridge
+      if (sp.ref && lv.eggs?.some((it) => it.id === sp.ref)) continue;
+      const [col, label] = SPOT_POI[sp.kind] || ['#7048e8', sp.kind];
+      kinds.add('spot:' + sp.kind); total++;
+      layers.pois.addLayer(L.circleMarker([sp.target.lat, sp.target.lon], { radius: 6, color: '#222', weight: 1.5, fillColor: col, fillOpacity: 0.95 })
+        .bindTooltip(`${esc(sp.name)}<br><span style="color:#666">${esc(label)} &middot; ${esc(n)}</span>`)
+        .bindPopup(`<b>${esc(sp.name)}</b> <span style="color:#666">${esc(label)}</span>` + spotHtml(sp)));
+    }
+  }
+  const el = $('poiLegend');
+  const kindInfo = (k) => (k.startsWith('spot:') ? SPOT_POI[k.slice(5)] || ['#7048e8', k.slice(5)] : POI[k] || ['#7048e8', k]);
+  if (el) el.innerHTML = [...kinds].map((k) => `<span style="color:${kindInfo(k)[0]};text-shadow:0 0 1px #000">&#9679;</span> ${esc(kindInfo(k)[1])}`).join(' &nbsp; ')
+    + (bears ? `<br>bears found: ${bearsFound} / ${bears}` : '');
+  dbg.pois = { total, bears, bearsFound };
+}
+addEventListener('storage', (e) => { if (e.key === 'berlinDrive.eggs.found') renderPois(); });
+setInterval(() => { const f = [...foundIds()].sort().join(','); if (f !== poiFound) renderPois(); }, 2000);
+
+// ---- live car (game tab posts {type:'pos', level, x, z, heading, speed, lat, lon, t} ~4x/s) ----
+const bc = typeof BroadcastChannel === 'function' ? new BroadcastChannel('berlinDrive') : null;
+const send = (msg) => { if (bc) bc.postMessage(msg); else try { localStorage.setItem('berlinDrive.cmd', JSON.stringify({ ...msg, t: Date.now() })); } catch { /* no storage */ } };
+const carIcon = (deg) => L.divIcon({ className: '', iconSize: [28, 28], iconAnchor: [14, 14],
+  html: `<svg class="car" width="28" height="28" viewBox="-14 -14 28 28" style="transform:rotate(${deg}deg)">
+    <path d="M0,-12 L8,9 L0,4 L-8,9 Z" fill="#e03131" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>` });
+let carMarker = null, lastDistT = 0;
+function onPos(m) {
+  if (!m || m.type !== 'pos' || !LV[m.level]) return;
+  car = { ...m, seen: Date.now() };
+  dbg.live = car;
+  const ll = isFinite(m.lat) && isFinite(m.lon) ? [m.lat, m.lon] : LV[m.level].frame.toLatLon(m.x, m.z);
+  const deg = (m.heading || 0) / D2R;
+  if (!carMarker) carMarker = L.marker(ll, { icon: carIcon(deg), keyboard: false, zIndexOffset: 1000 }).addTo(layers.car);
+  else { carMarker.setLatLng(ll); carMarker.getElement()?.querySelector('svg')?.style.setProperty('transform', `rotate(${deg}deg)`); }
+  carMarker.bindTooltip(`car: ${Math.round(m.speed || 0)} km/h, ${esc(m.level)}`);
+  if ($('follow').checked) map.panTo(ll, { animate: true, duration: 0.25 });
+  if (Date.now() - lastDistT > 1000) { lastDistT = Date.now(); renderDistances(); }
+}
+if (bc) bc.onmessage = (e) => onPos(e.data);
+addEventListener('storage', (e) => { if (e.key === 'berlinDrive.pos') try { onPos(JSON.parse(e.newValue)); } catch { /* bad json */ } });
+const gameLive = () => car && Date.now() - car.seen < 2500;
+setInterval(() => {
+  const on = gameLive();
+  $('live').textContent = on ? `game live: ${car.level}, ${Math.round(car.speed || 0)} km/h` : 'game not open';
+  $('live').className = on ? 'on' : '';
+  if (!on && carMarker) carMarker.setOpacity(0.4); else carMarker?.setOpacity(1);
+}, 500);
+
+// ---- click: coordinates + "drive here" ----
+function gameUrl(lat, lon, deg) {
+  return `index.html?at=${lat.toFixed(6)},${lon.toFixed(6)},${Math.round(deg)}`;
+}
+window.driveHere = (level, lat, lon) => {
+  const deg = +(document.querySelector('#hdgSel')?.value || 90), lv = LV[level], p = lv.frame.toXZ(lat, lon);
+  if (gameLive()) send({ type: 'teleport', level, x: p.x, z: p.z, heading: deg * D2R });
+  else window.open(gameUrl(lat, lon, deg), 'berlinDriveGame');
+  map.closePopup();
+};
+map.on('click', (e) => {
+  const { lat, lng } = e.latlng, inside = LEVELS.filter((n) => LV[n] && insideLevel(LV[n], ...Object.values(LV[n].frame.toXZ(lat, lng))));
+  let html = `<b>${lat.toFixed(5)}&deg; N, ${lng.toFixed(5)}&deg; E</b>`;
+  if (!inside.length) html += '<br>outside the level';
+  else {
+    for (const n of inside) {
+      const p = LV[n].frame.toXZ(lat, lng);
+      html += `<br>${esc(n)}: x ${p.x.toFixed(1)}, z ${p.z.toFixed(1)} m`;
+    }
+    const nm = nameAt(LV[inside[inside.length - 1]], ...Object.values(LV[inside[inside.length - 1]].frame.toXZ(lat, lng)));
+    if (nm) html += `<br><span style="color:#666">${esc(nm)}</span>`;
+    html += `<br>heading <select id="hdgSel">${[['N', 0], ['E', 90], ['S', 180], ['W', 270]].map(([k, v]) => `<option value="${v}"${v === 90 ? ' selected' : ''}>${k}</option>`).join('')}</select><br>`;
+    html += inside.map((n) => `<button onclick="driveHere('${n}', ${lat}, ${lng})">drive here (${esc(n)})</button>`).join('');
+    html += `<br><span style="color:#666;font-size:11px">${gameLive() ? 'moves the car in the open game' : 'opens the game there'}; a spot inside a building snaps to the nearest street</span>`;
+  }
+  L.popup().setLatLng(e.latlng).setContent(html).openOn(map);
+});
+
+// ---- panel ----
+$('toggle').onclick = () => $('panel').classList.toggle('collapsed');
+$('follow').onchange = () => { if ($('follow').checked && carMarker) map.panTo(carMarker.getLatLng()); };
+
+(async () => {
+  for (const n of LEVELS) {
+    try {
+      const level = await getJson(`levels/${n}/level.json`);
+      LV[n] = { level, frame: makeFrame(level.origin) };
+      drawLevel(n);
+    } catch (e) { dbg.errors.push(String(e)); }
+  }
+  if (!LV[active]) active = Object.keys(LV)[0];
+  const all = L.featureGroup(Object.values(LV).map((lv) => lv.poly));
+  if (all.getLayers().length) map.fitBounds(all.getBounds(), { padding: [20, 20] });
+  renderDistances();
+  for (const n of Object.keys(LV)) {
+    const lv = LV[n];
+    if (lv.level.stream) try { lv.tiles = await getJson(`levels/${n}/${lv.level.stream.file}`); buildCoverage(lv); } catch (e) { dbg.errors.push(String(e)); }
+    try { lv.eggs = (await getJson(`levels/${n}/eggs.json`)).items || []; } catch { lv.eggs = []; }   // optional
+    try { lv.spots = (await getJson(`levels/${n}/spots.json`)).spots || []; } catch { lv.spots = []; }   // optional (build_spots.py)
+  }
+  renderPois();
+  renderDistances();
+  for (const n of Object.keys(LV)) {   // street names at the ends (minimap data, a few MB): last
+    try { prepNames(LV[n], await getJson(`levels/${n}/map.json`)); } catch (e) { dbg.errors.push('names: ' + e); }
+  }
+  renderDistances();
+  dbg.ready = true;
+})();
+</script>
+</body>
+</html>
