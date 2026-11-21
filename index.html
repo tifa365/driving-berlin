@@ -1,0 +1,2000 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Driving Berlin</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='4' y='3.5' width='8' height='5' rx='2' fill='%23c0392b'/%3E%3Crect x='1' y='6' width='14' height='5.5' rx='2' fill='%23c0392b'/%3E%3Ccircle cx='4.5' cy='12' r='2' fill='%23222'/%3E%3Ccircle cx='11.5' cy='12' r='2' fill='%23222'/%3E%3C/svg%3E">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #9fb4c8;
+               user-select: none; -webkit-user-select: none; }
+  #c { display: block; width: 100%; height: 100%; }
+  /* load-error box, bottom centre (fail() only; speed is on the round map HUD, js/minimap.js) */
+  #speed { font-family: sans-serif; position: absolute; color: #0F0; bottom: 25px; left: 40%;
+           text-align: center; white-space: pre; margin: 0 auto; padding: 10px;
+           background-color: rgba(0, 0, 0, 0.75); z-index: 1000; }
+  #speed:empty { display: none; }   /* no dark square while there is nothing to show */
+  /* camera sliders, in the same look as .button */
+  #camui { position: absolute; right: 12px; top: 12px; padding: 8px 10px; font-size: 80%;
+           font-family: sans-serif; color: #ddd; background-color: rgba(0, 0, 0, 0.75);
+           border: 1px solid #666; border-radius: 5px; display: grid;
+           grid-template-columns: auto 140px 48px; gap: 4px 8px; align-items: center; }
+  #camui output { text-align: right; font-variant-numeric: tabular-nums; }
+  /* dark translucent menu buttons */
+  .button { cursor: pointer; position: absolute; width: 80px; height: 28px; text-align: center;
+            line-height: 28px; font-size: 80%; font-family: sans-serif;
+            background-color: rgba(0, 0, 0, 0.75); border: 1px solid #666; border-radius: 5px; color: #ddd; }
+  .button:hover { background-color: #333; }
+  #credit { position: absolute; left: 6px; bottom: 4px; font: 10px sans-serif;
+            color: rgba(255, 255, 255, .8); text-shadow: 0 0 2px #000; }
+  /* the old top menu row: hidden state holders since the Esc menu (js/menu.js, 2026-11-21); the
+     selects / buttons keep their ids for code and console habits, the settings page drives the
+     same functions. #camui (camera sliders) is moved into the settings page while it is open.
+     --toprow (bottom edge of the row) stays as a variable for js/touch.js and js/areasign.js. */
+  :root { --toprow: 0px; }
+  #toprow { display: none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="toprow">
+<div id="camui">
+  <label for="camH">Höhe</label><input id="camH" type="range" min="10" max="600" step="5"><output id="camHv"></output>
+  <label for="camD">Abstand</label><input id="camD" type="range" min="5" max="600" step="5"><output id="camDv"></output>
+</div>
+<div class="button" id="restart" style="left:12px; top:12px;">Restart</div>
+<select class="button" id="moodSel" style="left:100px; top:12px; width:110px; height:30px;" title="mood (M = next)"></select>
+<div class="button" id="collide" style="left:218px; top:12px; width:110px;" title="street obstacles and tree trunks (C); buildings always block">Obstacles: off</div>
+<select class="button" id="speedSel" style="left:336px; top:12px; width:110px; height:30px;" title="top speed (panorama drive), forwards and backwards"></select>
+<div class="button" id="eggs" style="left:778px; top:12px; width:auto; min-width:56px; padding:0 8px; box-sizing:border-box; display:none;"></div>
+</div>
+<div id="speed"></div>
+<div class="button" id="sbahnOff" style="display:none; left:40%; bottom:84px; width:auto; padding:0 12px; z-index:1000; white-space:nowrap;" title="Rettungsbär: runter von den Gleisen auf die Straße (G)">🐻 Runter von den Gleisen <b>G</b></div>
+<div id="credit"></div>
+
+<script src="Box2D.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+// Keys (Esc = menu js/menu.js, the game pauses; H = menu on "Steuerung"): arrows drive (hold down at standstill = reverse),
+// V head-up / north-up, B car / bus, R restart, M next mood, F show LoD2 walls + tree trunks + mesh obstacles,
+// C street obstacles + tree trunks collide on/off (starts off on every load; buildings always block),
+// U turn around (anywhere, e.g. at the glass wall on the map edge; js/edge.js).
+// Quiet game (README Rules): no on-screen messages while driving (loading screen, menu and map may carry text).
+// Water (OSM): driving in sinks the car, respawn on the road 2 s earlier. Pits (level.pit): the car falls in, same rescue.
+// URL: ?height= ?distance= ?power= ?carscale= ?handling=arcade|classic ?mood=day|moon|snow ?skycam=1 ?maxspeed=50 (0 = free)
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { Vehicle, mapClamped, wrapAngle, SOLID } from './js/vehicle.js';
+import { createMood } from './js/mood.js';
+import { createCamCollider } from './js/camcollide.js';
+import { createCarGround } from './js/ground.js';
+import { createEdge } from './js/edge.js';
+import { createBalloon } from './js/balloon.js';   // easter egg: Weltballon (Zimmerstr./Wilhelmstr.), E = ride
+import { createNoDrive } from './js/nodrive.js';
+import { createRespectLine, MEMORIAL } from './js/respect.js';   // "Respect is Everything." on entering the Holocaust memorial (owner's exception to the quiet rule)
+import { loadSbahn, makeRoute, createSbahn } from './js/sbahn.js';   // easter egg: Stadtbahn viaduct (secret door at Jannowitzbruecke)
+import { loadTunnels, createTunnels } from './js/tunnels.js';   // drivable road tunnels (Tiergarten, Alexanderplatz)
+import { createBridges } from './js/bridges.js';   // bridges over water: drivable decks (Gustav-Heinemann-Bruecke ...)
+import { loadRoofs, createRoofs } from './js/roofs.js';   // easter egg: roof mode (Bundestag roof + Spree skywalk), bear lift on Paul-Loebe-Allee
+import { createLoading } from './js/loading.js';   // loading screen: the way into the game (blurred view sharpens with the progress)
+import { createMenu } from './js/menu.js';   // Esc menu (pause, settings, controls, bears, map); touch: round button top right
+import { createTouch, isCoarse } from './js/touch.js';   // touch pads on phones / tablets, feed the same key events
+import { site, fetchBin } from './js/site.js';   // optional site.json (published copy): tile URL, gzipped .bin files
+
+const params = new URLSearchParams(location.search);
+// one level: the streamed Mitte (small level `mitte` retired 2026-11-19); ?level= from old
+// bookmarks is ignored, and so is a mood-resume / teleport stamped with another level name
+const LEVEL = 'mitte_all';
+const $ = (id) => document.getElementById(id);
+const speedEl = $('speed');
+// loading screen (js/loading.js): up from here until the first view is in; also the old
+// berlinDrive.intro object (open, hide(), show() harmless)
+const loading = createLoading({ base: `levels/${LEVEL}/`, canvas: $('c') });
+const fail = (e) => { console.error(e); speedEl.style.color = '#f66'; speedEl.textContent = String(e.message || e); loading.fail(e); };
+// ---------- pause (Esc menu, overview map) and the loading hold ----------
+// reasons: 'menu', 'map' = frozen picture (nothing rendered, no physics, no sequence clocks);
+// 'load' = the loading screen: frames render (the blurred view), physics and sequences wait.
+// On release the frame clock restarts, so no large dt; held keys are dropped both ways.
+const pauseBy = new Set(['load']);
+let pausedRedraw = false;   // resize while frozen: draw the frozen picture once more
+const isFrozen = () => pauseBy.has('menu') || pauseBy.has('map');
+
+// ---------- three.js ----------
+const renderer = new THREE.WebGLRenderer({ canvas: $('c'), antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, isCoarse() ? 1 : 1.5));   // phones / tablets: 1 (fill rate, memory)
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9fb4c8);
+scene.fog = new THREE.Fog(0x9fb4c8, 1200, 4000);
+const camera = new THREE.PerspectiveCamera(35, 1, 1, 8000);
+let mood = null;   // ?mood=: sky, grade, fog, bloom (js/mood.js); null = plain daylight render
+function resize() {
+  renderer.setSize(innerWidth, innerHeight, false);
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  mood?.setSize(innerWidth, innerHeight);
+  pausedRedraw = true;
+}
+addEventListener('resize', resize); resize();
+
+// ---------- level ----------
+const base = `levels/${LEVEL}/`;
+loading.step('Lade den Stadtplan …', 0);
+const level = await fetch(base + 'level.json').then((r) => {
+  if (!r.ok) throw new Error(`levels/${LEVEL}/level.json: HTTP ${r.status} - run build_stream.py`);
+  return r.json();
+}).catch((e) => { fail(e); throw e; });
+$('credit').textContent = level.attribution;
+loading.step('Lade das Höhenmodell …', 0.1);
+// minimap HUD bottom left (js/minimap.js, levels/<name>/map.json from build_map.py); N = overview.
+// Loaded on the side: a failure there never stops the game.
+let minimap = null, mmMarkers = null;   // markers set before the module is in are handed over
+const minimapStub = { pending: true, setMarkers(l) { mmMarkers = l; } };
+import('./js/minimap.js').then((m) => { minimap = m.createMinimap({ level, base, isWater, onOverview }); if (mmMarkers) minimap.setMarkers(mmMarkers); })
+  .catch((e) => console.warn('minimap off:', e));
+const H = level.height;
+const heights = new Float32Array(await fetchBin(base + H.file).then((r) => r.arrayBuffer()));
+const WT = level.water;
+loading.step('Lade Wasser, S-Bahn, Tunnel und Brücken …', 0.25);
+const water = WT ? new Uint8Array(await fetchBin(base + WT.file).then((r) => r.arrayBuffer())) : null;
+// Stadtbahn viaduct (js/sbahn.js, levels/<name>/sbahn.json; null elsewhere): rails mode = the car on the deck
+const sbahnData = await loadSbahn(base), sbahnRoute = sbahnData ? makeRoute(sbahnData) : null;
+let sbahn = null;   // createSbahn() below (needs world, edge)
+// road tunnels (js/tunnels.js, levels/<name>/tunnels.json from build_tunnels.py): tunnel mode = the car under the ground
+const tunnelData = await loadTunnels(base);
+let tunnels = null;   // createTunnels() below (needs world, edge)
+// roof decks (js/roofs.js, levels/<name>/roofs_deck.* from build_roofs.py): roof mode = the car on a roof
+const roofData = await loadRoofs(base);
+let roofs = null;   // createRoofs() below (needs world, edge)
+// bridges over water (js/bridges.js, levels/<name>/bridges.json from build_bridges.py; null elsewhere):
+// deck outlines are never water, the deck profile is the car's road there (at deck level), rails at the drops
+const bridges = await createBridges({ base, world: () => world }).catch((e) => { console.warn('bridges off:', e); return null; });
+// OSM water minus bridges (build_level.py); (x, z) in three/Box2D coords. y (the car's road layer):
+// on a bridge deck only at deck level (fell off / under it: still water); without y: any deck is dry
+function isWater(x, z, y) {
+  if (!water) return false;
+  if (bridges && (y === undefined ? bridges.inDeck(x, z) : bridges.ground(x, z, y) !== null)) return false;
+  const i = Math.floor((x - WT.x0) / WT.cell), j = Math.floor((-z - WT.n0) / WT.cell);
+  return i >= 0 && j >= 0 && i < WT.nx && j < WT.nz && water[j * WT.nx + i] === 1;
+}
+// pits (build_level.py pit_layer: construction pit etc., the mesh lies >= 2 m under the
+// street): small level = one grid like the water mask + the pit-floor height; streamed level
+// (build_pits.py) = PT.windows, small grids per pit concatenated in the same two files
+// (element offsets off / floor.off); absent on other levels. Off in S-Bahn rails mode (viaduct).
+const PT = level.pit;
+loading.step('Lade Baugruben …', 0.4);
+const [pit, pitFloor] = PT ? await Promise.all([PT.file, PT.floor.file].map((f) => fetchBin(base + f).then((r) => r.arrayBuffer())))
+  .then(([a, b]) => [new Uint8Array(a), new Float32Array(b)]) : [null, null];
+const pitWins = !PT ? [] : (PT.windows || [{ ...PT, off: 0, floor: { ...PT.floor, off: 0 } }]).map((w) => ({ cell: 1, ...w }));
+function pitWin(x, z) {   // several pits: the window that holds (x, z), else one within 3 cells (rim floor lookup)
+  let near = null;
+  for (const w of pitWins) {
+    const i = Math.floor((x - w.x0) / w.cell), j = Math.floor((-z - w.n0) / w.cell);
+    if (i >= 0 && j >= 0 && i < w.nx && j < w.nz) return [w, i, j];
+    if (!near && i >= -3 && j >= -3 && i < w.nx + 3 && j < w.nz + 3) near = [w, i, j];
+  }
+  return near;
+}
+function isPit(x, z) {
+  if (!pit || sbahn?.active || tunnels?.active || roofs?.active) return false;
+  const q = pitWin(x, z);
+  if (!q) return false;
+  const [w, i, j] = q;
+  return i >= 0 && j >= 0 && i < w.nx && j < w.nz && pit[w.off + j * w.nx + i] === 1;
+}
+// mesh floor of the pit at (x, z); near the rim the nearest floor cell within 3 m; null off pits
+function pitFloorAt(x, z) {
+  const q = pit && pitWin(x, z);
+  if (!q) return null;
+  const [w, wi, wj] = q, F = w.floor, ci = wi - F.i0, cj = wj - F.j0;
+  let best = null, bd = Infinity;
+  for (let dj = -3; dj <= 3; dj++) for (let di = -3; di <= 3; di++) {
+    const i = ci + di, j = cj + dj, d = di * di + dj * dj;
+    if (i < 0 || j < 0 || i >= F.nx || j >= F.nz || d >= bd) continue;
+    const v = pitFloor[F.off + j * F.nx + i];
+    if (Number.isFinite(v)) { best = v; bd = d; }
+  }
+  return best;
+}
+const clampTo = (v, max) => (v < 0 ? 0 : v > max ? max : v);
+// frozen water (mood.frozen, e.g. snow): flat ice per connected water region (built
+// after the mood below); iceLevelAt = ice height or null. Every ground lookup asks it
+// first, so car, shadow, attitude and camera target ride on the flat ice.
+let ice = null;   // { rowStart, runA, runB, runR, level }
+function iceLevelAt(x, z) {
+  if (!ice || !isWater(x, z)) return null;
+  const i = Math.floor((x - WT.x0) / WT.cell), j = Math.floor((-z - WT.n0) / WT.cell);
+  let lo = ice.rowStart[j], hi = ice.rowStart[j + 1] - 1;   // last run of row j starting at <= i
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (ice.runA[m] <= i) lo = m; else hi = m - 1; }
+  return ice.level[ice.runR[lo]];
+}
+function groundAt(x, z) { const y = iceLevelAt(x, z); return y !== null ? y : gridAt(x, z); }
+// height model (LoD2 + mesh offset), bilinear; (x, z) in three/Box2D coords
+function gridAt(x, z) {
+  const fi = clampTo((x - H.x0) / H.cell, H.nx - 1), fj = clampTo((-z - H.n0) / H.cell, H.nz - 1);
+  const i = Math.min(Math.floor(fi), H.nx - 2), j = Math.min(Math.floor(fj), H.nz - 2);
+  const u = fi - i, v = fj - j, k = j * H.nx + i;
+  return (heights[k] * (1 - u) + heights[k + 1] * u) * (1 - v) +
+         (heights[k + H.nx] * (1 - u) + heights[k + H.nx + 1] * u) * v;
+}
+// the car on the real mesh road (js/ground.js): carY = its road height (wheel probes
+// into the drawn mesh, groundAt as fallback); gOff = carY - groundAt at the car.
+// groundNear = groundAt corrected by that offset, for ground lookups near the car
+// (camera target, tyre-track check) - the height model can be metres off the mesh.
+// S-Bahn rails mode: the deck profile replaces the street height model, no ice under the car
+// tunnel mode: the roadway profile replaces the mesh under the car (no mesh down there)
+const carGround = createCarGround({ scene, groundAt: (x, z) => (roofs?.active ? roofs.ground(x, z) : null) ?? (tunnels?.active ? tunnels.ground(x, z) : null) ?? (sbahn?.active ? sbahn.ground(x, z) : null) ?? groundAt(x, z),
+                                    override: (x, z) => (roofs?.active ? roofs.heightAt(x, z) : tunnels?.active ? tunnels.heightAt(x, z) : sbahn?.active ? null : bridges?.ground(x, z, carY) ?? iceLevelAt(x, z)) });   // bridge deck (at deck level)
+let carY = groundAt(level.spawn.x, level.spawn.z), gOff = 0;
+const groundNear = (x, z) => groundAt(x, z) + gOff;
+mood = createMood(params.get('mood') === 'night' ? 'moon' : params.get('mood'), { renderer, scene, camera, extent: level.extent, ground: groundAt(level.spawn.x, level.spawn.z),
+                                         groundAt: (x, z) => (tunnels?.active ? -1e4 : sbahnRoute?.deckIn(x, z) ?? groundNear(x, z)) });   // tunnel: no tyre tracks in the snow above   // snow: height model as a texture (S-Bahn deck: its own), tyre tracks
+if (mood?.frozen && water) {
+  // water mask -> row runs -> regions (union-find over runs overlapping the row above);
+  // ice level per region = median of the height grid over its cells (the grid follows
+  // the photogrammetry water, whose lumps go +-2 m; the median sits on top of most)
+  const nx = WT.nx, nz = WT.nz, rowStart = new Int32Array(nz + 1), A = [], B = [];
+  for (let j = 0; j < nz; j++) {
+    rowStart[j] = A.length;
+    for (let i = 0, o = j * nx; i < nx;) {
+      if (water[o + i] !== 1) { i++; continue; }
+      const a = i; while (i < nx && water[o + i] === 1) i++;
+      A.push(a); B.push(i);
+    }
+  }
+  rowStart[nz] = A.length;
+  const n = A.length, par = new Int32Array(n).map((_, k) => k);
+  const find = (k) => { while (par[k] !== k) k = par[k] = par[par[k]]; return k; };
+  for (let j = 1; j < nz; j++) {
+    for (let p = rowStart[j - 1], q = rowStart[j]; p < rowStart[j] && q < rowStart[j + 1];) {
+      if (A[p] < B[q] && A[q] < B[p]) { const rp = find(p), rq = find(q); if (rp !== rq) par[rp] = rq; }
+      if (B[p] < B[q]) p++; else q++;
+    }
+  }
+  const runR = new Int32Array(n), id = new Map(), samples = [];
+  const step = Math.max(1, Math.round(H.cell / WT.cell));
+  for (let j = 0; j < nz; j++) for (let k = rowStart[j]; k < rowStart[j + 1]; k++) {
+    const r = find(k);
+    if (!id.has(r)) { id.set(r, samples.length); samples.push([]); }
+    const g = runR[k] = id.get(r), z = -(WT.n0 + (j + 0.5) * WT.cell);
+    for (let i = A[k]; i < B[k]; i += step) samples[g].push(gridAt(WT.x0 + (i + 0.5) * WT.cell, z));
+  }
+  const level = new Float32Array(samples.map((v) => { v.sort((a, b) => a - b); return v[v.length >> 1]; }));
+  ice = { rowStart, runA: Int32Array.from(A), runB: Int32Array.from(B), runR, level };
+  // the sheet: one quad per run at its region's level (1 m steps along the banks)
+  const pos = new Float32Array(n * 12), idx = new Uint32Array(n * 6);
+  for (let j = 0; j < nz; j++) for (let k = rowStart[j]; k < rowStart[j + 1]; k++) {
+    const x0 = WT.x0 + A[k] * WT.cell, x1 = WT.x0 + B[k] * WT.cell, y = level[runR[k]];
+    const zN = -(WT.n0 + (j + 1) * WT.cell), zS = -(WT.n0 + j * WT.cell);
+    pos.set([x0, y, zS, x1, y, zS, x1, y, zN, x0, y, zN], k * 12);
+    idx.set([4 * k, 4 * k + 1, 4 * k + 2, 4 * k, 4 * k + 2, 4 * k + 3], k * 6);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  ice.mesh = new THREE.Mesh(geo, mood.iceMaterial()); ice.mesh.name = 'ice'; scene.add(ice.mesh);
+}
+
+// photogrammetric mesh: lighting is baked into the textures, so render unlit (js/stream.js);
+// meshLoaded = the spawn view's tiles are in (set at the bottom, stream.idle())
+let meshLoaded = !level.stream;
+// streamed level (build_stream.py): 3D Tiles from disk around the camera (js/stream.js);
+// on-screen "Detail" low / normal / high = GPU budget (MB) + screen-space error tau (px)
+// + anisotropic filtering (2 / 4 / 8, new tiles), normal = the level's stream values; the
+// base layer (all 49 L4 roots, ~105 MB with halved textures) stays loaded inside the budget; saved as localStorage 'berlinDrive.detail'.
+// ?tilebudget= MB overrides the budget (not saved); stream.setBudget(mb) / setTau(px) at runtime
+let stream = null;
+let setDetail = null, detailNow = () => null, detailChoices = [];   // the Detail levels (streamed level only)
+if (level.stream) {
+  loading.step('Bereite die Stadt vor …', 0.5);
+  const { createStreamer } = await import('./js/stream.js');
+  const nb = level.stream.budgetMB || 1024, nt = level.stream.tau || 24;
+  // phones / tablets (pointer: coarse) get a 'phone' entry (quarter budget) and start on it until a choice is saved
+  const DETAIL = { ...(isCoarse() ? { phone: [Math.round(nb / 4), nt * 4 / 3, 2] } : {}),
+                   low: [Math.round(nb / 2), nt * 4 / 3, 2], normal: [nb, nt, 4], high: [Math.round(nb * 1.5), nt * 0.75, 8] };
+  const detailDefault = isCoarse() ? 'phone' : 'normal';
+  let detail = detailDefault;
+  try { detail = localStorage.getItem('berlinDrive.detail') || detailDefault; } catch { /* no storage */ }
+  if (!DETAIL[detail]) detail = detailDefault;
+  const urlBudget = params.get('tilebudget');
+  stream = await createStreamer({ scene, camera, renderer, mood, url: base + level.stream.file, tiles: site.tiles,
+                                  budgetMB: +(urlBudget || DETAIL[detail][0]),
+                                  tau: DETAIL[detail][1], aniso: DETAIL[detail][2] }).catch((e) => { fail(e); throw e; });
+  const sel = document.createElement('select');
+  sel.className = 'button'; sel.id = 'detailSel';
+  Object.assign(sel.style, { left: '582px', top: '12px', width: '120px', height: '30px' });
+  sel.title = 'tile detail: GPU memory for the city mesh + sharpness (low for older / integrated GPUs)';
+  for (const k of Object.keys(DETAIL)) sel.add(new Option('Detail: ' + k, k));
+  sel.value = detail;
+  // setDetail(k): the Detail control (hidden select + the settings row of the Esc menu)
+  setDetail = (k) => {
+    if (!DETAIL[k]) return false;
+    const [b, t, an] = DETAIL[k];
+    if (!urlBudget) stream.setBudget(b);
+    stream.setTau(t); stream.setAniso(an);
+    detail = k; sel.value = k;
+    try { localStorage.setItem('berlinDrive.detail', k); } catch { /* private mode */ }
+    return true;
+  };
+  detailNow = () => detail;
+  detailChoices = Object.keys(DETAIL);
+  sel.addEventListener('change', (e) => { setDetail(e.target.value); e.target.blur(); });
+  sel.addEventListener('keydown', (e) => e.preventDefault());   // arrows drive, not pick
+  $('toprow').appendChild(sel);   // hidden state holder (#toprow)
+}
+
+// ---------- physics: walls as static Box2D boxes ----------
+const b2Vec2 = Box2D.Common.Math.b2Vec2;
+const world = new Box2D.Dynamics.b2World(new b2Vec2(0, 0), true);
+// two static bodies: buildings + level border always collide; street clutter (tree
+// trunks, mesh obstacles) can be switched off (setCollision, the Obstacles button)
+const wallBody = world.CreateBody(new Box2D.Dynamics.b2BodyDef());
+const clutterBody = world.CreateBody(new Box2D.Dynamics.b2BodyDef());
+// streamed level: OSM building walls (js/walls.js, levels/<name>/walls.* from build_walls.py), loaded after
+// start, fixtures only in the cells around the car, always on; null on a level without walls.json
+let walls = null;
+const WALL_HALF = 0.3;
+function addWall(x0, z0, x1, z1, body = wallBody) {
+  const dx = x1 - x0, dz = z1 - z0, len = Math.hypot(dx, dz);
+  if (len < 0.05) return;
+  const s = new Box2D.Collision.Shapes.b2PolygonShape();
+  s.SetAsOrientedBox(len / 2 + WALL_HALF, WALL_HALF, new b2Vec2((x0 + x1) / 2, (z0 + z1) / 2), Math.atan2(dz, dx));
+  const fd = new Box2D.Dynamics.b2FixtureDef(); fd.shape = s; fd.friction = SOLID.friction; fd.restitution = SOLID.restitution;   // no bounce (js/vehicle.js)
+  body.CreateFixture(fd);
+}
+const ex = level.extent;   // level border (buildings: js/walls.js, trunks + obstacles: js/clutter.js)
+addWall(ex.minX, ex.minZ, ex.maxX, ex.minZ); addWall(ex.maxX, ex.minZ, ex.maxX, ex.maxZ);
+addWall(ex.maxX, ex.maxZ, ex.minX, ex.maxZ); addWall(ex.minX, ex.maxZ, ex.minX, ex.minZ);
+// F overlay: the level border in red (walls / clutter draw their own cells via setDebug)
+const wallLines = [];
+for (const [x0, z0, x1, z1] of [[ex.minX, ex.minZ, ex.maxX, ex.minZ], [ex.maxX, ex.minZ, ex.maxX, ex.maxZ],
+                                [ex.maxX, ex.maxZ, ex.minX, ex.maxZ], [ex.minX, ex.maxZ, ex.minX, ex.minZ]])
+  wallLines.push(x0, groundAt(x0, z0) + 0.5, z0, x1, groundAt(x1, z1) + 0.5, z1);
+const wallGeo = new THREE.BufferGeometry();
+wallGeo.setAttribute('position', new THREE.Float32BufferAttribute(wallLines, 3));
+const wallViz = new THREE.LineSegments(wallGeo, new THREE.LineBasicMaterial({ color: 0xff3060 }));
+wallViz.visible = false; scene.add(wallViz);
+// pits in the F overlay: magenta outline at street level and on the pit floor, posts at the corners
+const pitLines = [];
+for (const { p, floor } of PT?.pits || []) {
+  for (let i = 0; i + 1 < p.length; i++) {
+    const [x0, z0] = p[i], [x1, z1] = p[i + 1];
+    pitLines.push(x0, groundAt(x0, z0) + 0.5, z0, x1, groundAt(x1, z1) + 0.5, z1, x0, floor + 0.3, z0, x1, floor + 0.3, z1,
+                  x0, floor + 0.3, z0, x0, groundAt(x0, z0) + 0.5, z0);
+  }
+}
+const pitViz = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(pitLines, 3)),
+  new THREE.LineBasicMaterial({ color: 0xff00ff }));
+pitViz.visible = false; scene.add(pitViz);
+
+// ---------- vehicles (real size, stock engine, 160 km/h) ----------
+const MAX_VEHICLE_SPEED_KMH = 160;
+// panorama drive: top speed (km/h, 0 = free = full engine up to 160), on-screen
+// "Speed" dropdown, saved as localStorage 'berlinDrive.speedLimit'; ?maxspeed= overrides
+// (not saved). Applied by the vehicle's governor (js/vehicle.js); reverse has the same limit.
+const SPEED_CHOICES = [30, 50, 70, 0];
+let speedLimitKmh = 50;
+try { const v = params.get('maxspeed') ?? localStorage.getItem('berlinDrive.speedLimit'); if (v != null && isFinite(+v) && +v >= 0) speedLimitKmh = +v; } catch { /* no storage */ }
+function applySpeedLimit() {
+  if (!vehicle) return;
+  vehicle.speedLimit = speedLimitKmh / 3.6;
+  vehicle.reverseLimit = speedLimitKmh / 3.6;   // owner: backwards as fast as forwards (0 = free)
+}
+const POWER = +(params.get('power') || 1);
+const HANDLING_MODE = params.get('handling') || 'arcade';   // or 'classic'
+const CAR_SCALE = +(params.get('carscale') || 1);
+const models = {};
+// vehicle menu (top row) + B: 'car:<paint>' or 'bus', saved as berlinDrive.vehicle.
+// Paints stay saturated mid-tones: no white / grey (vanish in the snow), no black / navy (vanish at night).
+const PAINTS = { red: 0xd01818, blue: 0x1f5fd6, yellow: 0xf2bf16, green: 0x1e9a3c, orange: 0xf0670f, purple: 0x8a2bd0 };
+const VEHICLE_CHOICES = [...Object.keys(PAINTS).map((c) => 'car:' + c), 'bus'];
+let vehicleChoice = 'car:red', carPaint = 'red';
+try { const v = localStorage.getItem('berlinDrive.vehicle'); if (VEHICLE_CHOICES.includes(v)) vehicleChoice = v; } catch { /* no storage */ }
+if (vehicleChoice !== 'bus') carPaint = vehicleChoice.slice(4);
+const paintMats = [];   // the car's 'Body' material(s); the bus is textured
+function paintCar(c) { carPaint = c; for (const m of paintMats) m.color.set(PAINTS[c]); }
+const loader = new GLTFLoader();
+loading.step('Lade die Fahrzeuge …', 0.7);
+await Promise.all(['Car', 'Bus'].map((n) => loader.loadAsync(`models/${n}.glb`)
+  .then((g) => {
+    models[n.toLowerCase()] = g.scene;
+    // painted (owner: the light grey body vanished in the snow; default red); the bus is textured
+    g.scene.traverse((o) => { if (o.material?.name === 'Body' && !paintMats.includes(o.material)) paintMats.push(o.material); });
+  }))).catch(fail);
+paintCar(carPaint);
+// The car is drawn in its own pass after the mesh, depth-tested, plus a ghost
+// silhouette wherever the mesh hides it (see renderFrame).
+const carScene = new THREE.Scene();
+carScene.add(new THREE.HemisphereLight(0xffffff, 0x667080, 2.2));
+const carSun = new THREE.DirectionalLight(0xffffff, 1.6); carSun.position.set(-0.5, 1, 0.3); carScene.add(carSun);
+const carRoot = new THREE.Group(); carRoot.scale.setScalar(CAR_SCALE); carScene.add(carRoot);
+// soft blob shadow (replaces the models' hard built-in 'Shadow' outline), drawn
+// first in the car pass, nudged away from the sun
+// car-shaped: a blurred rounded rectangle (the footprint), dark core, soft rim
+const SH = { w: 256, h: 512, m: 40 };            // canvas size and blur margin (px)
+function softShadowTexture() {
+  const c = document.createElement('canvas'); c.width = SH.w; c.height = SH.h;
+  const g = c.getContext('2d');
+  g.filter = 'blur(10px)'; g.fillStyle = 'rgba(0,0,0,0.95)';
+  g.beginPath(); g.roundRect(SH.m, SH.m, SH.w - 2 * SH.m, SH.h - 2 * SH.m, 46); g.fill();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
+  new THREE.MeshBasicMaterial({ map: softShadowTexture(), transparent: true, depthWrite: false }));
+// own pass between world and car (transparent objects render after opaque ones,
+// so inside the car pass a depth-less shadow would paint over the car)
+const shadowScene = new THREE.Scene();
+shadow.material.depthTest = false; shadowScene.add(shadow);
+const ghostMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45,
+                                              depthFunc: THREE.GreaterDepth, depthWrite: false });
+const SUN_OFFSET = [0.9, -0.55];   // metres per metre of car height, away from carSun (low sun: visible beside the car)
+// The blob used to be the footprint moved by the sun offset (about 1.1 m ahead / 0.7 m
+// aside at the spawn heading): its near edge came off the car, so the tyres on the sun side
+// (owner: "the left back tire has a shadow looking weird") stood on bright asphalt beside a
+// dark patch. Like a real cast shadow it now spans from the footprint to the offset: the
+// plane's 4 vertices are stretched back by the ground part of the offset (car height x
+// SUN_OFFSET; a jump's extra lift still detaches it). Object position / scale unchanged
+// (mood.js hangs the headlight pool on it). WHEEL_LOOK.sunStretch 0 = old look.
+const shadowPos = shadow.geometry.attributes.position, shadowSign = Array.from(shadowPos.array, Math.sign);
+shadow.frustumCulled = false;   // the stretched plane outgrows its bounding sphere
+function stretchShadow(h) {
+  const s = WHEEL_LOOK.sunStretch * 1.2 * CAR_SCALE, ox = SUN_OFFSET[0] * s, oz = SUN_OFFSET[1] * s;
+  const c = Math.cos(h), sn = Math.sin(h);   // world -> shadow local (rotation.y = -h)
+  const lx = (ox * c + oz * sn) / shadow.scale.x, lz = (-ox * sn + oz * c) / shadow.scale.z;
+  for (let i = 0; i < 4; i++) {
+    shadowPos.setX(i, shadowSign[3 * i] * 0.5 * (1 + Math.abs(lx)) - lx / 2);
+    shadowPos.setZ(i, shadowSign[3 * i + 2] * 0.5 * (1 + Math.abs(lz)) - lz / 2);
+  }
+  shadowPos.needsUpdate = true;
+}
+for (const m of Object.values(models)) { const sh = m.getObjectByName('Shadow'); if (sh) sh.visible = false; }
+// ---------- wheel look (owner: "make the tyres more visible", "the car floats") ----------
+// Both GLBs have the front wheels as nodes (WheelFL / WheelFR, octagonal car tyres with a
+// spoked rim texture on the outer face); the rear wheels are merged into 'Details' (car) /
+// the body mesh (bus). They are split out here (connected parts the size of a front wheel,
+// sharing the vertex buffers, model files untouched). Every wheel becomes a pivot Group at
+// its axle centre (front: keeps the node name, so the steering line in frame() still finds
+// it; rotation order YXZ = steer, then spin) holding the original mesh. The pivot is scaled
+// (radius x scale, width x width), raised by the growth so the tyre bottom stays put, moved
+// out by `out` m, spun by speed / radius. Wheel material: a clone of the shared one whose
+// texels below `split` (linear luminance: the tyre) are darkened x tyre and the brighter
+// ones (rim / hub) turned a neutral metallic grey x rim. core*: the tight contact shadow
+// under the body (opacity, x body footprint, edge blur in px). Live: berlinDrive.wheelLook = {…}
+const WHEEL_LOOK = { scale: 1.03, width: 0.92, out: 0.0, spin: 1,   // owner 2026-11-21: 1.14 / 1.12 / 0.045, then 1.08 / 1.02 / 0.03 still looked too wide
+                     tyre: 0.45, rim: 1.15, split: 0.26,
+                     core: 0.5, coreW: 0.94, coreL: 0.96, coreBlur: 3, spots: 1, sunStretch: 1,
+                     lean: 0.35, leanMax: 2.8, leanRise: 0.25, leanFall: 0.4, leanDrop: 0.008, leanBus: 1.25, leanBusT: 1.5,
+                     blink: 1, blinkHz: 1.5, blinkGlow: 1.6, blinkTurnDeg: 55, blinkWindow: 3, blinkMinKmh: 12,   // owner 2026-11-21: 20 deg / 2.5 s / 0.7 s lock was still overreactive
+                     blinkLockT: 1.6, blinkLock: 0.9, blinkOffT: 0.6, blinkStraight: 3 };   // lean: deg per m/s2 of lateral acceleration (0 = off)
+const wheelU = { uTyre: { value: WHEEL_LOOK.tyre }, uRim: { value: WHEEL_LOOK.rim }, uSplit: { value: WHEEL_LOOK.split } };
+const wheelMats = new Map();   // shared source material -> wheel clone
+function wheelMaterial(src) {
+  if (!wheelMats.has(src)) {
+    const m = src.clone(); m.name = src.name + 'Wheel';
+    m.onBeforeCompile = (s) => {
+      Object.assign(s.uniforms, wheelU);
+      s.fragmentShader = 'uniform float uTyre, uRim, uSplit;\n' + s.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+        { float l = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+          vec3 rim = min(mix(vec3(l), diffuseColor.rgb, 0.35) * uRim, vec3(1.0));
+          diffuseColor.rgb = mix(diffuseColor.rgb * uTyre, rim, smoothstep(uSplit * 0.7, uSplit * 1.3, l)); }`);
+    };
+    m.customProgramCacheKey = () => 'wheelLook';
+    wheelMats.set(src, m);
+  }
+  return wheelMats.get(src);
+}
+function wheelPivot(mesh, parent, cx, cy, cz, r, name) {   // centre in parent coords; the caller offsets the mesh by -centre
+  const pivot = new THREE.Group(); pivot.name = name; pivot.rotation.order = 'YXZ';
+  parent.add(pivot); pivot.add(mesh);
+  mesh.material = wheelMaterial(mesh.material);
+  return { pivot, c: new THREE.Vector3(cx, cy, cz), r, side: Math.sign(cx), spin: 0 };
+}
+function splitRearWheels(src, d) {   // src: merged mesh, d: front wheel diameter -> wheel meshes (centre in src coords)
+  const g = src.geometry, P = g.attributes.position, I = g.index;
+  if (!I) return [];
+  const n = P.count, par = new Int32Array(n).map((_, i) => i);
+  const find = (a) => { while (par[a] !== a) a = par[a] = par[par[a]]; return a; };
+  const join = (a, b) => { par[find(a)] = find(b); };
+  for (let t = 0; t < I.count; t += 3) { join(I.getX(t), I.getX(t + 1)); join(I.getX(t + 1), I.getX(t + 2)); }
+  const at = new Map();   // split seams (uv / normal) join by position
+  for (let i = 0; i < n; i++) { const k = `${P.getX(i).toFixed(4)},${P.getY(i).toFixed(4)},${P.getZ(i).toFixed(4)}`; if (at.has(k)) join(i, at.get(k)); else at.set(k, i); }
+  const box = new Map();
+  for (let i = 0; i < n; i++) {
+    const r = find(i); let b = box.get(r);
+    if (!b) box.set(r, b = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]);
+    for (let a = 0; a < 3; a++) { const v = P.getComponent(i, a); if (v < b[a]) b[a] = v; if (v > b[a + 3]) b[a + 3] = v; }
+  }
+  const wheelRoots = new Set();
+  for (const [r, b] of box) {   // as tall and as long as a front wheel, behind the middle (forward is -z), off-centre
+    const dy = b[4] - b[1], dz = b[5] - b[2];
+    if (Math.abs(dy - d) < 0.08 * d && Math.abs(dz - d) < 0.08 * d && b[2] + b[5] > 0 && Math.abs(b[0] + b[3]) > 0.8) wheelRoots.add(r);
+  }
+  if (wheelRoots.size !== 2) return [];
+  const keep = [], tris = new Map([...wheelRoots].map((r) => [r, []]));
+  for (let t = 0; t < I.count; t += 3) { const r = find(I.getX(t)); (tris.get(r) || keep).push(I.getX(t), I.getX(t + 1), I.getX(t + 2)); }
+  g.setIndex(keep); g.boundingBox = g.boundingSphere = null;
+  return [...wheelRoots].map((r) => {
+    const b = box.get(r), wg = new THREE.BufferGeometry();
+    for (const [k, a] of Object.entries(g.attributes)) wg.setAttribute(k, a);   // shared buffers, own index
+    wg.setIndex(tris.get(r));
+    wg.boundingBox = new THREE.Box3(new THREE.Vector3(b[0], b[1], b[2]), new THREE.Vector3(b[3], b[4], b[5]));   // the wheel's own box (the shared buffer spans the body: mood.fitCar, culling)
+    wg.boundingSphere = wg.boundingBox.getBoundingSphere(new THREE.Sphere());
+    const mesh = new THREE.Mesh(wg, src.material); mesh.name = src.name + 'Wheel';
+    return { mesh, c: [(b[0] + b[3]) / 2, (b[1] + b[4]) / 2, (b[2] + b[5]) / 2], r: (b[4] - b[1]) / 2 };
+  });
+}
+function prepareWheels(m) {
+  const wheels = [];
+  let d = 0;
+  for (const name of ['WheelFL', 'WheelFR']) {
+    const w = m.getObjectByName(name);
+    if (!w?.isMesh) continue;
+    w.geometry.computeBoundingBox();
+    const b = w.geometry.boundingBox, c = b.getCenter(new THREE.Vector3()), r = (b.max.y - b.min.y) / 2;
+    d = 2 * r;
+    const parent = w.parent, at = w.position.clone().add(c);
+    w.name = name + 'Mesh'; w.position.set(0, 0, 0);
+    const p = wheelPivot(w, parent, at.x, at.y, at.z, r, name);
+    w.position.copy(c).negate();
+    wheels.push(p);
+  }
+  if (d) {
+    const merged = [];
+    m.traverse((o) => { if (o.isMesh && !/Wheel|Shadow|Plane/.test(o.name)) merged.push(o); });
+    for (const o of merged) for (const s of splitRearWheels(o, d)) {
+      const cx = s.c[0] + o.position.x, cy = s.c[1] + o.position.y, cz = s.c[2] + o.position.z;
+      const p = wheelPivot(s.mesh, o.parent, cx, cy, cz, s.r, cx > 0 ? 'WheelRR' : 'WheelRL');
+      s.mesh.position.set(-s.c[0], -s.c[1], -s.c[2]);
+      wheels.push(p);
+    }
+  }
+  m.userData.wheels = wheels;
+  if (wheels.length) {   // sprung body: everything but the wheel pivots, pivot at hub height (lean in turns, leanBody)
+    const hubY = wheels.reduce((t, w) => t + w.c.y, 0) / wheels.length, sprung = new THREE.Group();
+    sprung.name = 'Sprung'; sprung.position.y = hubY;
+    const pivots = new Set(wheels.map((w) => w.pivot));
+    for (const o of [...m.children]) if (!pivots.has(o)) { sprung.add(o); o.position.y -= hubY; }
+    m.add(sprung);
+    m.userData.sprung = sprung; m.userData.hubY = hubY; m.userData.lean = 0; m.userData.leanV = 0;
+  }
+  poseWheels(m);
+}
+function poseWheels(m) {   // scale / out / raise from WHEEL_LOOK (spawn and live tuning)
+  const L = WHEEL_LOOK;
+  for (const w of m.userData.wheels || []) {
+    w.pivot.position.set(w.c.x + w.side * L.out, w.c.y + (L.scale - 1) * w.r, w.c.z);
+    w.pivot.scale.set(L.width, L.scale, L.scale);
+  }
+  wheelU.uTyre.value = L.tyre; wheelU.uRim.value = L.rim; wheelU.uSplit.value = L.split;
+}
+function wheelTyres(m) {   // contact spots under the wheel centres (the octagons' lowest vertex wanders)
+  const ws = m.userData.wheels || [];
+  if (ws.length === 4) m.userData.tyres = ws.map((w) => [w.pivot.position.x, w.pivot.position.z]);
+}
+let wheelClock = 0;
+function spinWheels(m, fwd, dt) {   // fwd: forward speed (m/s); forward is -z, so rolling ahead is a negative turn about +x
+  const ws = m?.userData.wheels;
+  if (!ws) return;
+  for (const w of ws) { w.spin = (w.spin - WHEEL_LOOK.spin * fwd * dt / (w.r * WHEEL_LOOK.scale * CAR_SCALE)) % (2 * Math.PI); w.pivot.rotation.x = w.spin; }
+}
+// body lean onto the outside tyres (owner: "see the car pressing into the asphalt"): only the
+// sprung body rolls, about the longitudinal axis at hub height, from the lateral acceleration
+// (forward speed x yaw rate: zero when steering at a standstill), through a critically damped
+// spring (leanRise / leanFall: ~95 % times in s; bus x leanBusT slower, x leanBus stronger),
+// capped at leanMax deg, plus a small drop (leanDrop m at full lean). Right turn (yaw rate
+// > 0 in Box2D) -> rotation.z > 0 = the right side rises, the body settles onto the left tyres.
+function leanBody(m, aLat, dt) {
+  const s = m?.userData.sprung;
+  if (!s) return;
+  const L = WHEEL_LOOK, u = m.userData, bus = m === models.bus;
+  const max = THREE.MathUtils.degToRad(L.leanMax) * (bus ? L.leanBus : 1);
+  const target = max > 0 ? THREE.MathUtils.clamp(THREE.MathUtils.degToRad(L.lean) * (bus ? L.leanBus : 1) * aLat, -max, max) : 0;
+  const T = (Math.abs(target) > Math.abs(u.lean) ? L.leanRise : L.leanFall) * (bus ? L.leanBusT : 1);
+  const w = 4.75 / Math.max(0.05, T);
+  for (let n = Math.ceil(dt / 0.008), i = 0; i < n; i++) {   // substeps: stable for any frame time
+    u.leanV += (w * w * (target - u.lean) - 2 * w * u.leanV) * dt / n; u.lean += u.leanV * dt / n;
+  }
+  s.rotation.z = u.lean;
+  s.position.y = u.hubY - (max > 0 ? L.leanDrop * Math.min(1, Math.abs(u.lean) / max) : 0);
+}
+for (const m of Object.values(models)) prepareWheels(m);
+// blinkers (owner: "could the car use its blinker when going left or right?"): an amber lens
+// at each body corner (found on the body surface: the vertex furthest out toward that
+// corner within a height band, front lower than rear), children of the sprung body. Only in a
+// real turn (owner: not when steering out of the way): from what the car does, not the key -
+// the heading change over the last blinkWindow s (0.1 s bins, signed sum) reaches blinkTurnDeg
+// above blinkMinKmh, or the wheels sit near full lock (> blinkLock x lock) for blinkLockT s
+// while rolling slowly (junction turn from a standstill). A dodge goes there and back: its net
+// change stays small, nothing shows. Once on it flashes (blinkHz, half the time lit) until the
+// yaw rate has stayed under blinkStraight deg/s for blinkOffT s. Off during rescues / sequences,
+// in the air, while paused, or when switched off (setBlinkers, saved as berlinDrive.blinkers). MeshBasic colour x blinkGlow: plain
+// amber by day, over the bloom threshold in the moon mood's HDR buffer.
+const blinkMat = new THREE.MeshBasicMaterial({ color: 0xffa31a });
+const blinkGeo = new THREE.SphereGeometry(0.5, 10, 6);
+const blink = { side: 0, t: 0, straight: 0, lockT: 0, bin: 0, binT: 0, yaw: new Float32Array(64) };
+let blinkersOn = true;
+try { blinkersOn = localStorage.getItem('berlinDrive.blinkers') !== '0'; } catch { /* no storage */ }
+function setBlinkers(on) {
+  blinkersOn = !!on;
+  try { localStorage.setItem('berlinDrive.blinkers', blinkersOn ? '1' : '0'); } catch { /* no storage */ }
+  if (!blinkersOn) { blink.side = 0; for (const m of Object.values(models)) for (const b of m.userData.blinkers || []) b.lens.visible = false; }
+  pausedRedraw = true;   // a paused picture shows the change
+  return blinkersOn;
+}
+function addBlinkers(m) {
+  const s = m.userData.sprung;
+  if (!s) return;
+  m.updateMatrixWorld(true);
+  const inv = s.matrixWorld.clone().invert(), v = new THREE.Vector3(), pts = [];
+  s.traverse((o) => {
+    if (!o.isMesh || !o.visible || /Shadow|Plane/.test(o.name)) return;
+    const P = o.geometry.attributes.position, ix = o.geometry.index;
+    for (let j = 0, n = ix ? ix.count : P.count; j < n; j++) pts.push(v.fromBufferAttribute(P, ix ? ix.getX(j) : j).applyMatrix4(o.matrixWorld).applyMatrix4(inv).clone());
+  });
+  if (!pts.length) return;
+  const b = new THREE.Box3().setFromPoints(pts), H = b.max.y - b.min.y, hw = (b.max.x - b.min.x) / 2, hl = (b.max.z - b.min.z) / 2;
+  const size = 0.26 * Math.max(1, hw / 0.95);   // car ~0.26 m, bus a little more
+  m.userData.blinkers = [];
+  for (const [sx, sz, lo, hi] of [[-1, -1, 0.2, 0.45], [1, -1, 0.2, 0.45], [-1, 1, 0.3, 0.55], [1, 1, 0.3, 0.55]]) {
+    let best = null, bs = -Infinity;
+    for (const p of pts) {
+      if (p.y < b.min.y + lo * H || p.y > b.min.y + hi * H) continue;
+      const sc = sx * p.x / hw + 1.3 * sz * p.z / hl;   // corner, a little more toward the end than the side
+      if (sc > bs) { bs = sc; best = p; }
+    }
+    if (!best) continue;
+    const lens = new THREE.Mesh(blinkGeo, blinkMat);
+    lens.name = 'Blinker'; lens.visible = false;
+    lens.position.set(best.x - sx * 0.25 * size, best.y, best.z - sz * 0.15 * size);   // half sunk into the corner
+    lens.scale.set(size, size * 0.5, size * 0.6);
+    s.add(lens);
+    m.userData.blinkers.push({ lens, side: sx });
+  }
+}
+for (const m of Object.values(models)) addBlinkers(m);
+function updateBlinkers(m, dt, off) {   // off: sequence / pause / air; turn > 0 = right (yaw rate > 0 in Box2D)
+  const bl = m?.userData.blinkers;
+  if (!bl) return;
+  const L = WHEEL_LOOK, B = blink, Y = B.yaw;
+  const w = vehicle.body.GetAngularVelocity(), kmh = vehicle.speedKmh;
+  const nb = Math.min(Y.length, Math.max(1, Math.round(L.blinkWindow / 0.1)));
+  if (off || !L.blink || !blinkersOn) { B.side = 0; B.lockT = 0; Y.fill(0); }
+  else {
+    Y[B.bin] += w * dt; B.binT += dt;   // heading change, 0.1 s bins
+    while (B.binT >= 0.1) { B.binT -= 0.1; B.bin = (B.bin + 1) % nb; Y[B.bin] = 0; }
+    let sum = 0;
+    for (let i = 0; i < nb; i++) sum += Y[i];
+    const ang = vehicle.steering.angle, lock = vehicle.spec.lock || 0.6;
+    B.lockT = Math.abs(ang) > L.blinkLock * lock && kmh > 0.5 && kmh < L.blinkMinKmh + 4 ? B.lockT + dt : 0;
+    let turn = 0;
+    if (kmh > L.blinkMinKmh && Math.abs(sum) >= THREE.MathUtils.degToRad(L.blinkTurnDeg)) turn = Math.sign(sum) * (vehicle.gear < 0 ? -1 : 1);
+    else if (B.lockT >= L.blinkLockT) turn = Math.sign(ang);
+    if (turn && turn !== B.side) { B.side = turn; B.t = 0; B.straight = 0; }
+    if (B.side) {
+      B.straight = Math.abs(w) < THREE.MathUtils.degToRad(L.blinkStraight) ? B.straight + dt : 0;
+      if (B.straight >= L.blinkOffT) { B.side = 0; B.lockT = 0; Y.fill(0); }   // straight again: forget the turn, a new one must build up
+    }
+  }
+  B.t += dt;
+  const lit = B.side !== 0 && (B.t * L.blinkHz) % 1 < 0.5;
+  blinkMat.color.setHex(0xffa31a).multiplyScalar(L.blinkGlow);
+  for (const b of bl) b.lens.visible = lit && b.side === B.side;
+}
+// wheels on the road: the tyre bottoms sit at the model's y = 0 (car: -3.9 cm, bus: -0.7 cm
+// as modelled), so ride.clearance in js/ground.js is the true tyre-to-road height. The
+// lowest vertex per quadrant (|x| > 0.3, |z| > 0.5) is the tyre contact (also the AO spots).
+for (const m of Object.values(models)) {
+  m.updateMatrixWorld(true);
+  const q = [null, null, null, null], v = new THREE.Vector3();
+  m.traverse((o) => {
+    if (!o.isMesh || /Shadow|Plane/.test(o.name)) return;
+    const P = o.geometry.attributes.position, ix = o.geometry.index;   // indexed: the split-out rear wheels share their body's vertex buffer
+    for (let j = 0, n = ix ? ix.count : P.count; j < n; j++) {
+      const i = ix ? ix.getX(j) : j;
+      v.fromBufferAttribute(P, i).applyMatrix4(o.matrixWorld);
+      if (Math.abs(v.x) < 0.3 || Math.abs(v.z) < 0.5) continue;
+      const k = (v.x > 0 ? 1 : 0) + (v.z > 0 ? 2 : 0);
+      if (!q[k] || v.y < q[k].y) q[k] = v.clone();
+    }
+  });
+  const ok = q.every(Boolean), y0 = ok ? Math.min(...q.map((p) => p.y)) : 0;
+  m.position.y = -y0;
+  m.userData.tyres = ok ? q.map((p) => [p.x, p.z]) : [];
+  wheelTyres(m);
+}
+// contact shadow (owner: "the car floats"): the blob above is offset toward the sun,
+// so nothing darkened the road where the car touches it. Ambient occlusion right under
+// the body plus a dark spot under each tyre, posed on the ride plane (heading, pitch,
+// roll of the car), no sun offset, fading out when the car leaves the ground.
+// Live tuning: berlinDrive.contact = { body: 0.7 } (opacities, sizes in m / x footprint).
+const CONTACT = { body: 0.7, bodyW: 1.12, bodyL: 1.06, tyre: 0.95, tyreW: 0.8, tyreL: 1.25, fadeH: 0.25 };   // first try 1.0 / 0.98 hid under the body from the 60 m camera; tyre spots 0.85 / 0.7 / 1.1 before the wheel look (2026-11-21)
+function blobTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d'), r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  r.addColorStop(0, 'rgba(0,0,0,1)'); r.addColorStop(0.5, 'rgba(0,0,0,0.75)'); r.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = r; g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+}
+const contact = new THREE.Group();
+const contactMat = (map) => new THREE.MeshBasicMaterial({ map, transparent: true, depthTest: false, depthWrite: false, color: 0x000000 });
+const contactBody = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), contactMat(softShadowTexture()));
+contact.add(contactBody);
+const tyreTex = blobTexture();
+const contactTyres = [0, 1, 2, 3].map(() => { const t = new THREE.Mesh(contactBody.geometry, contactMat(tyreTex)); contact.add(t); return t; });
+// tight core (WHEEL_LOOK.core*): the body footprint shrunk a little, soft only at its rim
+// (a few px of blur), so the road right under the sills and bumpers reads dark
+const CORE = { w: 128, h: 256, m: 8 };
+let coreBlur = -1;
+const contactCore = new THREE.Mesh(contactBody.geometry, contactMat(null));
+contact.add(contactCore);
+function coreTexture() {   // redrawn only when coreBlur changes
+  if (coreBlur === WHEEL_LOOK.coreBlur) return;
+  coreBlur = WHEEL_LOOK.coreBlur;
+  const c = document.createElement('canvas'); c.width = CORE.w; c.height = CORE.h;
+  const g = c.getContext('2d');
+  g.filter = `blur(${coreBlur}px)`; g.fillStyle = '#000';
+  g.beginPath(); g.roundRect(CORE.m, CORE.m, CORE.w - 2 * CORE.m, CORE.h - 2 * CORE.m, 18); g.fill();
+  contactCore.material.map?.dispose();
+  contactCore.material.map = new THREE.CanvasTexture(c); contactCore.material.needsUpdate = true;
+}
+coreTexture();
+contact.renderOrder = 2; contact.traverse((o) => { o.renderOrder = 2; });   // over the sun blob
+shadowScene.add(contact);
+function fitContact(model, spec) {   // per vehicle (spawn), sizes in carRoot units (x CAR_SCALE there)
+  contactBody.scale.set(spec.bodyWidth * CONTACT.bodyW * SH.w / (SH.w - 2 * SH.m), 1,
+                        spec.bodyLength * CONTACT.bodyL * SH.h / (SH.h - 2 * SH.m));
+  coreTexture();
+  contactCore.scale.set(spec.bodyWidth * WHEEL_LOOK.coreW * CORE.w / (CORE.w - 2 * CORE.m), 1,
+                        spec.bodyLength * WHEEL_LOOK.coreL * CORE.h / (CORE.h - 2 * CORE.m));
+  const ty = model?.userData.tyres || [];
+  contactTyres.forEach((t, i) => {
+    t.visible = !!ty[i] && !!WHEEL_LOOK.spots;   // spots: 0 = only the body core (owner comparison)
+    if (ty[i]) { t.position.set(ty[i][0], 0, ty[i][1]); t.scale.set(CONTACT.tyreW * (spec.wheelRadius > 0.35 ? 1.4 : 1), 1, CONTACT.tyreL * (spec.wheelRadius > 0.35 ? 1.3 : 1)); }
+  });
+}
+// splash ring when the car goes into the water
+const splash = new THREE.Mesh(new THREE.RingGeometry(0.8, 1, 48).rotateX(-Math.PI / 2),
+  new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false }));
+splash.visible = false; carScene.add(splash);
+mood?.attachCar({ carScene, carRoot, shadow, carScale: CAR_SCALE, sunOffset: SUN_OFFSET, ghostMat });   // lights, tail lights, headlight pool, ghost colour
+
+// The Rescue Bear: an original little helper (bear in a yellow hard hat, in a
+// propeller basket) who fishes sunken cars out of the Spree with a rod.
+const RESCUER_SCALE = 2.6;   // reads at the 60 m camera
+const ROD_TIP = new THREE.Vector3(1.7, 1.1, 0);      // local, line hangs from here
+function makeRescuer() {
+  const g = new THREE.Group();
+  const M = (c, r = 0.6) => new THREE.MeshStandardMaterial({ color: c, roughness: r });
+  const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
+  const fur = M(0x8b5a2b, 0.9), snout = M(0xdcb48a, 0.9), black = M(0x111111, 0.3);
+  add(new THREE.CylinderGeometry(0.95, 0.75, 0.75, 24), M(0xd8452b), 0, 0, 0);                      // basket
+  add(new THREE.TorusGeometry(0.95, 0.08, 8, 28).rotateX(Math.PI / 2), M(0xf2c14e), 0, 0.37, 0);    // rim
+  add(new THREE.SphereGeometry(0.55, 20, 14), fur, 0, 0.6, 0);                                       // body
+  add(new THREE.SphereGeometry(0.46, 20, 14), fur, 0, 1.28, 0);                                      // head
+  for (const sx of [-1, 1]) {
+    add(new THREE.SphereGeometry(0.16, 12, 8), fur, 0.33 * sx, 1.62, 0.02);                          // ears
+    add(new THREE.SphereGeometry(0.065, 10, 8), black, 0.16 * sx, 1.4, -0.4);                        // eyes
+  }
+  add(new THREE.SphereGeometry(0.2, 14, 10), snout, 0, 1.2, -0.38);                                  // muzzle
+  add(new THREE.SphereGeometry(0.075, 10, 8), black, 0, 1.27, -0.57);                                // nose
+  add(new THREE.SphereGeometry(0.48, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), M(0xffd21f, 0.4), 0, 1.45, 0); // hard hat
+  add(new THREE.CylinderGeometry(0.62, 0.62, 0.05, 24), M(0xffd21f, 0.4), 0, 1.46, 0);              // brim
+  add(new THREE.CylinderGeometry(0.05, 0.05, 1.3, 8), M(0x888888), 0, 2.4, 0.55);                    // mast
+  const prop = add(new THREE.BoxGeometry(2.8, 0.05, 0.24), M(0x333333), 0, 3.05, 0.55); prop.name = 'prop';
+  // fishing rod from the paw to ROD_TIP
+  const a = new THREE.Vector3(0.45, 0.75, -0.25), d = ROD_TIP.clone().sub(a);
+  const rod = add(new THREE.CylinderGeometry(0.03, 0.045, d.length(), 8), M(0x5a3b1e), 0, 0, 0);
+  rod.position.copy(a).addScaledVector(d, 0.5);
+  rod.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize());
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([ROD_TIP.clone(), ROD_TIP.clone()]),
+                              new THREE.LineBasicMaterial({ color: 0xf5f5f5 }));
+  line.name = 'line'; g.add(line);
+  const hook = add(new THREE.TorusGeometry(0.16, 0.035, 6, 14, Math.PI * 1.5), M(0x999999, 0.3), 0, 0, 0); hook.name = 'hook';
+  g.scale.setScalar(RESCUER_SCALE); g.visible = false;
+  return g;
+}
+const rescuer = makeRescuer(); carScene.add(rescuer);
+// place the rescuer so its rod tip is at world `tip`, with `len` metres of line below
+function poseRescuer(tip, len, t) {
+  rescuer.visible = true;
+  rescuer.position.copy(tip).addScaledVector(ROD_TIP, -RESCUER_SCALE);
+  rescuer.getObjectByName('prop').rotation.y = t * 25;
+  const l = len / RESCUER_SCALE, line = rescuer.getObjectByName('line');
+  const pos = line.geometry.attributes.position;
+  pos.setXYZ(1, ROD_TIP.x, ROD_TIP.y - l, ROD_TIP.z); pos.needsUpdate = true;
+  rescuer.getObjectByName('hook').position.set(ROD_TIP.x, ROD_TIP.y - l, ROD_TIP.z);
+}
+let vehicle, vehicleObj, camReady = false;
+let jump = null;   // bouncy hop state (see "jump" below); declared here because spawn() runs first
+const shadowBase = new THREE.Vector3(1, 1, 1);
+function spawn(kind, x, z, heading) {
+  if (vehicle) vehicle.destroy();
+  vehicle = new Vehicle(world, kind, x, z, heading, POWER, HANDLING_MODE);
+  vehicle.maxSpeed = MAX_VEHICLE_SPEED_KMH / 3.6;
+  applySpeedLimit();
+  if (jump?.air) vehicle.setAirborne(true);   // B in mid-air: the bus flies on
+  if (vehicleObj) { carRoot.remove(vehicleObj); vehicleObj.scale.setScalar(1); }
+  vehicleObj = models[kind];
+  if (vehicleObj) carRoot.add(vehicleObj);
+  // plane sized so the un-blurred core is ~5 % larger than the body footprint
+  shadow.scale.set(vehicle.spec.bodyWidth * 1.12 * CAR_SCALE * SH.w / (SH.w - 2 * SH.m), 1,
+                   vehicle.spec.bodyLength * 1.06 * CAR_SCALE * SH.h / (SH.h - 2 * SH.m));
+  shadowBase.copy(shadow.scale);
+  fitContact(vehicleObj, vehicle.spec);
+  mood?.fitCar(vehicleObj);
+  if (camReady) camReset();
+}
+const S = level.spawn;
+// a mood switch reloads the page (shaders and composer are built per mood): resume where the car was
+let resume = null;
+try { resume = JSON.parse(sessionStorage.getItem('berlinDrive.resume')); sessionStorage.removeItem('berlinDrive.resume'); } catch { /* no storage */ }
+// map.html "drive here" with the game closed: ?at=lat,lon[,bearing deg] (level frame: ENU around level.origin)
+const geoFrame = (() => {
+  const A = 6378137, E2 = 6.69437999014e-3, D = Math.PI / 180, o = level.origin;
+  const ecef = (la, lo) => { la *= D; lo *= D; const n = A / Math.sqrt(1 - E2 * Math.sin(la) ** 2); return [n * Math.cos(la) * Math.cos(lo), n * Math.cos(la) * Math.sin(lo), n * (1 - E2) * Math.sin(la)]; };
+  const O = ecef(o.lat, o.lon), sa = Math.sin(o.lat * D), ca = Math.cos(o.lat * D), so = Math.sin(o.lon * D), co = Math.cos(o.lon * D);
+  const toXZ = (lat, lon) => { const p = ecef(lat, lon), d = [p[0] - O[0], p[1] - O[1], p[2] - O[2]]; return { x: -so * d[0] + co * d[1], z: sa * co * d[0] + sa * so * d[1] - ca * d[2] }; };
+  const toLatLon = (x, z) => { let lat = o.lat - z / 111132, lon = o.lon + x / (111320 * ca);
+    for (let i = 0; i < 3; i++) { const q = toXZ(lat, lon); lon += (x - q.x) / (111320 * ca); lat -= (z - q.z) / 111132; } return { lat, lon }; };
+  return { toXZ, toLatLon };
+})();
+const AT = (() => { const a = (params.get('at') || '').split(',').map(Number);
+  if (a.length < 2 || !a.slice(0, 2).every(isFinite)) return null;
+  const p = geoFrame.toXZ(a[0], a[1]), e = level.extent;
+  return p.x >= e.minX && p.x <= e.maxX && p.z >= e.minZ && p.z <= e.maxZ ? { ...p, h: isFinite(a[2]) ? a[2] * Math.PI / 180 : S.heading } : null; })();
+// easter-egg spots with their own link: ?spot=<slug> (levels/<name>/spots.json from build_spots.py,
+// start poses checked offline against walls, clutter, water, pits). Kept in the URL: reload = try again.
+const spots = await fetch(base + 'spots.json').then((r) => (r.ok ? r.json() : null), () => null).then((j) => j?.spots || [], () => []);
+const SPOT = (() => { const s = params.get('spot');
+  if (!s) return null;
+  const q = spots.find((p) => p.slug === s.toLowerCase());
+  if (!q) console.warn(`?spot=${s}: unknown spot, normal spawn. Known: ${spots.map((p) => p.slug).join(', ')}`);
+  return q ? { x: q.start.x, z: q.start.z, h: q.start.heading, slug: q.slug, roof: q.roof } : null; })();   // roof: a roof spot (js/roofs.js, entered below)
+const spotUrl = (slug) => { const u = new URL(location.pathname, location.origin); u.searchParams.set('spot', slug); return u.href; };
+const startKind = vehicleChoice === 'bus' ? 'bus' : 'car';   // saved menu choice (the paint is already on)
+// order: mood-reload resume, ?spot=, ?at=, level spawn
+if (resume && resume.level === LEVEL) spawn(resume.kind === 'bus' || resume.kind === 'car' ? resume.kind : startKind, resume.x, resume.z, resume.h);
+else if (SPOT) spawn(startKind, SPOT.x, SPOT.z, SPOT.h);
+else if (AT) spawn(startKind, AT.x, AT.z, AT.h);
+else spawn(startKind, S.x, S.z, S.heading);
+{ const p = vehicle.getPosition(); loading.setStart(p.x, p.y); }   // the plate: "Du betrittst <quarter>"
+loading.step('Lade Orte und Hindernisse …', 0.85);
+
+// ---------- camera: north-up / head-up chase camera ----------
+// A speed zoom on a log2 scale: 21 at rest, falling with speed between 20 and
+// 160 km/h (each step of 1 = 2x further out), minus 0.2 on desktop, minus up to 0.5
+// at high latitude; zoom and look-ahead follow at rate 0.5, head-up turns at rate 3.
+// The zoom becomes a distance factor 2^(zoomAtRest - zoom) on the two sliders,
+// which set camera height and distance at standstill.
+const isMobile = /iPhone|Android.+Mobile/.test(navigator.userAgent);
+const zoomBias = (isMobile ? -0.5 : -0.2) + mapClamped(Math.abs(level.origin.lat), 37, 60, 0, -0.5);
+const zoomAtRest = 21 + zoomBias;
+// zoom-out at 160 km/h, capped by ?zoomout= (default 1.5x)
+const ZOOM_OUT = Math.max(1, +(params.get('zoomout') || 1.5));
+const targetZoom = () => mapClamped(vehicle.speedKmh, 20, 160, 21, 21 - Math.log2(ZOOM_OUT)) + zoomBias;
+const lookAheadM = () => mapClamped(vehicle.speedKmh, 0, 160, 5, 30);
+// default: behind the car (head-up), low enough to look down the street
+// (?northup=1: north-up instead, e.g. at ~40 deg tilt with height 65, distance 55)
+const cam = { headUp: !params.has('northup'), direction: 0, zoom: zoomAtRest, offX: 0, offZ: 0,
+              height: 60, dist: 80, target: new THREE.Vector3() };   // owner's standard since 2026-11-21 (was 60 / 60)
+// moods keep the owner's view and its saved sliders; ?skycam=1 opts into the low
+// mood camera (horizon in frame), with its own saved slider values
+const skyCam = !!mood && params.has('skycam');
+if (skyCam) Object.assign(cam, mood.cam);
+// two slider sets: street (cam6, the values above) and S-Bahn rails mode (own keys, 30/50);
+// cam.height / cam.dist are the live (blended) values the camera code reads
+const camKey = 'berlinDrive.cam6.' + (skyCam ? mood.name + '.' : '');
+const camKeySbahn = 'berlinDrive.cam4.sbahn.' + (skyCam ? mood.name + '.' : '');
+// look-ahead capped so the car stays in frame: at most 60 % of the ground visible
+// between the look point and the bottom edge (short distance sliders left it behind at speed)
+function lookAhead() {
+  const k = Math.pow(2, zoomAtRest - cam.zoom);
+  const down = Math.atan2(cam.height, cam.dist) + THREE.MathUtils.degToRad(camera.fov / 2);
+  const behind = (cam.dist - cam.height / Math.tan(down)) * k;
+  return Math.max(0, Math.min(cam.ahead ?? lookAheadM(), 0.6 * behind));
+}
+// cam.ahead: lookAheadM() eased (updateCamera, AHEAD_RATE 1/s): a wall stops the car within a
+// step, and the look point used to snap ~8 m back with it (read as the car "jumping back")
+const AHEAD_RATE = 1.5;
+function camTargetOffset() {
+  const e = lookAhead(), h = vehicle.getHeading();
+  return [Math.sin(h) * e, -Math.cos(h) * e];
+}
+// camera collision (js/camcollide.js): shorten the boom toward the car when a
+// BUILDING of the city mesh (userData.world meshes only) is between camera and car
+// or around the camera. Building = over an OSM footprint (levels/<name>/buildings.bin,
+// build_buildings.py, loaded lazily below); trees, poles, signs never move the
+// camera - the ghost silhouette shows the car. Until / without the mask: old
+// heuristic (thin stuff ignored). Nothing OVER the car
+// (bridges, viaduct, station roofs, arcades) moves it: camcollide's `over` probe,
+// pivot = camCarPt (road + 2.5 m, opts.pivot). Runtime switch
+// setCamAvoid(bool), saved as localStorage 'berlinDrive.camAvoid'; ?camcollide=0|1 overrides.
+const camCol = createCamCollider(scene);
+fetch(base + 'buildings.json').then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
+  .then((M) => fetchBin(base + M.file).then((r) => r.arrayBuffer()).then((buf) => {
+    const bits = new Uint8Array(buf), stride = Math.ceil(M.nx / 8);   // packed bits, row j = north n0 + j*cell
+    camCol.opts.isBuilding = (x, z) => {
+      const i = Math.floor((x - M.x0) / M.cell), j = Math.floor((-z - M.n0) / M.cell);
+      return i >= 0 && j >= 0 && i < M.nx && j < M.nz && ((bits[j * stride + (i >> 3)] >> (7 - (i & 7))) & 1) === 1;
+    };
+  }))
+  .catch((e) => console.info('camera collision: no building footprints (run build_buildings.py), trees may move the camera:', e.message));
+let camAvoid = true, camTun = false;   // camTun: tunnel mode, camera avoidance skipped
+const camCarPt = new THREE.Vector3(), camLookPt = new THREE.Vector3();
+const camNose = new THREE.Vector3(), camTail = new THREE.Vector3(), camEnds = [camNose, camTail];
+function camReset() {
+  cam.ahead = lookAheadM();
+  [cam.offX, cam.offZ] = camTargetOffset();
+  cam.zoom = targetZoom();
+  cam.direction = cam.headUp ? vehicle.getHeading() : 0;
+  camCol.reset();
+}
+camReset(); camReady = true;
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+                set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
+const sliders = { height: [$('camH'), $('camHv')], dist: [$('camD'), $('camDv')] };
+// one-time migration: the old cam3 values were tuned on the viaduct -> S-Bahn set
+if (!skyCam) for (const key of ['height', 'dist']) {
+  const old = store.get('berlinDrive.cam3.' + key);
+  if (old != null && store.get(camKeySbahn + key) == null) store.set(camKeySbahn + key, old);
+}
+const camSets = { street: { key: camKey, height: cam.height, dist: cam.dist },
+                  sbahn: { key: camKeySbahn, height: 30, dist: 50 } };
+let camSetName = 'street', camBlend = null;   // camBlend: { t, height, dist } start values
+const camSetNow = () => (sbahn?.active ? 'sbahn' : 'street');
+function showCamSet() {
+  for (const key of ['height', 'dist']) {
+    const [inp, out] = sliders[key], v = camSets[camSetName][key];
+    inp.value = v; out.textContent = v + ' m';
+  }
+}
+// edits the ACTIVE set (street or S-Bahn); outside a blend the camera follows at once
+function setCam(key, v) {
+  const inp = sliders[key][0], set = camSets[camSetName];
+  v = Math.min(+inp.max, Math.max(+inp.min, Math.round(v)));
+  set[key] = v; showCamSet();
+  if (!camBlend) cam[key] = v;
+  store.set(set.key + key, v);
+}
+for (const set of Object.values(camSets)) for (const key of ['height', 'dist']) {
+  const url = set === camSets.street ? params.get(key === 'dist' ? 'distance' : 'height') : null;
+  const saved = url ?? store.get(set.key + key);
+  if (saved != null && isFinite(+saved)) set[key] = Math.min(+sliders[key][0].max, Math.max(+sliders[key][0].min, Math.round(+saved)));
+}
+camSetName = camSetNow(); cam.height = camSets[camSetName].height; cam.dist = camSets[camSetName].dist; showCamSet();
+for (const key of ['height', 'dist']) {
+  sliders[key][0].addEventListener('input', (e) => { setCam(key, +e.target.value); pausedRedraw = true; });   // in the Esc menu (settings page)
+}
+// rails mode on/off (bear landing, exit, R, teleport, map, mood resume): blend ~1.5 s
+const CAM_BLEND_S = 1.5;
+function updateCamSet(dt) {
+  const now = camSetNow();
+  if (now !== camSetName) { camSetName = now; camBlend = { t: 0, height: cam.height, dist: cam.dist }; showCamSet(); }
+  const set = camSets[camSetName];
+  if (!camBlend) { cam.height = set.height; cam.dist = set.dist; return; }
+  camBlend.t = Math.min(1, camBlend.t + dt / CAM_BLEND_S);
+  const s = camBlend.t * camBlend.t * (3 - 2 * camBlend.t);   // smoothstep
+  cam.height = camBlend.height + (set.height - camBlend.height) * s;
+  cam.dist = camBlend.dist + (set.dist - camBlend.dist) * s;
+  if (camBlend.t >= 1) camBlend = null;
+}
+function updateCamera(dt) {
+  updateCamSet(dt);
+  const t = 0.5, p = camFocus || vehicle.getPosition(), h = vehicle.getHeading();
+  cam.zoom += (targetZoom() - cam.zoom) * dt * t;
+  cam.ahead += (lookAheadM() - cam.ahead) * (1 - Math.exp(-AHEAD_RATE * dt));
+  let tx, tz;
+  if (cam.headUp) {                       // head-up: turn with the car, look ahead
+    const n = lookAhead();
+    tx = p.x + Math.sin(cam.direction) * n; tz = p.y - Math.cos(cam.direction) * n;
+    cam.direction = wrapAngle(cam.direction + wrapAngle(h - cam.direction) * 3 * dt);
+  } else {                                // north-up: eased offset toward the travel direction
+    const [ox, oz] = camTargetOffset();
+    cam.offX += (ox - cam.offX) * dt * t; cam.offZ += (oz - cam.offZ) * dt * t;
+    tx = p.x + cam.offX; tz = p.y + cam.offZ;
+    cam.direction = 0;
+  }
+  const k = Math.pow(2, zoomAtRest - cam.zoom);
+  cam.target.set(tx, camFocus?.h ?? groundNear(tx, tz), tz);   // pit fall: the look point goes down with the car
+  camera.position.set(tx - Math.sin(cam.direction) * cam.dist * k,
+                      cam.target.y + cam.height * k,
+                      tz + Math.cos(cam.direction) * cam.dist * k);
+  // the sky camera lifts the look point (horizon in frame, camera above the tree crowns)
+  camLookPt.set(cam.target.x, cam.target.y + (skyCam ? mood.cam.lookUp * k : 0), cam.target.z);
+  if (!!(tunnels?.active || roofs?.active) !== camTun) { camTun = !camTun; camCol.reset(); }   // also on a roof (js/roofs.js): the camera is above everything
+  if (camAvoid && meshLoaded && !camTun) {   // tunnel mode: the ground between camera and car is no building
+    // boom from a point 2.5 m above the road at the car (clear of the mesh road,
+    // which sits up to ~2 m above the height model); camera and look point are
+    // turned up about it (wall right behind the car) and/or pulled toward it by the
+    // same amount, so the car keeps its place in the picture
+    camCarPt.set(p.x, (camFocus?.h ?? groundNear(p.x, p.y)) + 2.5, p.y);
+    camCol.opts.minFit = Math.max(12, 2.2 * vehicle.spec.bodyLength * CAR_SCALE);   // shortest boom: car / bus still fit
+    const half = 0.5 * vehicle.spec.bodyLength * CAR_SCALE, hx = Math.sin(h) * half, hz = -Math.cos(h) * half, ry = camCarPt.y - 1;
+    camNose.set(p.x + hx, ry, p.y + hz); camTail.set(p.x - hx, ry, p.y - hz);   // roof height at both ends
+    camCol.update(camera.position, camLookPt, camCarPt, dt, camEnds);
+  }
+  camera.lookAt(camLookPt);
+  keepCarInFrame(p, h);
+}
+// last rule of the camera: the car (centre, nose, tail) stays inside the central
+// CAR_SAFE box of the picture (NDC). Whatever the sliders, look-ahead, zoom lag,
+// head-up lag, lookUp or boom shortening did: if the car is outside, the look
+// point moves toward the car just enough (bisection); else nothing changes.
+const CAR_SAFE = 0.75;
+const camCarPts = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+const _ndc = new THREE.Vector3(), _look0 = new THREE.Vector3();
+let camKeepFrame = true;   // berlinDrive.camKeepFrame = false: off (tests only)
+let camFrameFix = 0;   // last shift of the look point toward the car (0..1), for tests
+function carNdcMax() {
+  camera.updateMatrixWorld();
+  let m = 0;
+  for (const q of camCarPts) {
+    _ndc.copy(q).project(camera);
+    m = Math.max(m, _ndc.z < -1 || _ndc.z > 1 ? 9 : Math.max(Math.abs(_ndc.x), Math.abs(_ndc.y)));
+  }
+  return m;
+}
+function keepCarInFrame(p, h) {
+  const y = groundNear(p.x, p.y) + (jump ? jump.y : 0) + 0.8 * CAR_SCALE;
+  const half = 0.5 * vehicle.spec.bodyLength * CAR_SCALE, fx = Math.sin(h) * half, fz = -Math.cos(h) * half;
+  camCarPts[0].set(p.x, y, p.y); camCarPts[1].set(p.x + fx, y, p.y + fz); camCarPts[2].set(p.x - fx, y, p.y - fz);
+  camFrameFix = 0;
+  if (!camKeepFrame || carNdcMax() <= CAR_SAFE) return;
+  _look0.copy(camLookPt);
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 8; i++) {
+    const a = (lo + hi) / 2;
+    camera.lookAt(camLookPt.lerpVectors(_look0, camCarPts[0], a));
+    if (carNdcMax() <= CAR_SAFE) hi = a; else lo = a;
+  }
+  camera.lookAt(camLookPt.lerpVectors(_look0, camCarPts[0], hi));
+  camera.updateMatrixWorld();
+  camFrameFix = hi;
+}
+function setCamAvoid(on) {
+  camAvoid = !!on; camCol.reset();
+  store.set('berlinDrive.camAvoid', camAvoid ? '1' : '0');
+}
+{
+  const v = params.get('camcollide') ?? store.get('berlinDrive.camAvoid');
+  camAvoid = v == null ? true : v !== '0';   // URL override is not saved
+}
+
+// ---------- obstacle switch (C): tree trunks + mesh obstacles (clutterBody) on/off;
+// buildings, level border, height and water stay. Streamed level: trunks + obstacles come from
+// js/clutter.js (clutter.json, build_clutter.py), whose cell bodies follow clutterOn() ----------
+const hasClutter = await fetch(base + 'clutter.json', { method: 'HEAD' }).then((r) => r.ok, () => false);
+let clutter = null;   // js/clutter.js, loaded after start (below the walls)
+const hasColliders = (level.trees || []).length + (level.obstacles || []).length > 0 || hasClutter;
+let collision = true;
+function setCollision(on) {
+  collision = hasColliders && !!on;
+  if (hasColliders) { clutterBody.SetActive(collision); store.set('berlinDrive.collision', collision ? '1' : '0'); }
+  $('collide').textContent = 'Obstacles: ' + (collision ? 'on' : 'off');
+  return collision;
+}
+setCollision(false);   // owner (2026-11-21): every start begins with obstacles off; the switch works for the session only
+if (!hasColliders) {   // streamed level: no trunks / obstacles to switch
+  Object.assign($('collide').style, { opacity: 0.5, cursor: 'default', pointerEvents: 'none' });
+  $('collide').title = 'no street obstacles on this level';
+}
+$('collide').addEventListener('click', (e) => { setCollision(!collision); e.currentTarget.blur(); });
+
+// ---------- input (stickX steers, stickY > 0 throttle, < 0 brake) ----------
+const keys = new Set();
+// W A S D drive like the arrow keys (owner 2026-11-21): they enter the set under the arrow names
+const WASD = { w: 'ArrowUp', a: 'ArrowLeft', s: 'ArrowDown', d: 'ArrowRight' };
+const driveKey = (e) => (!e.ctrlKey && !e.metaKey && !e.altKey && WASD[e.key.toLowerCase()]) || e.key;
+addEventListener('keydown', (e) => {
+  if (pauseBy.size) {   // menu / map / loading: no game key (js/menu.js and js/loading.js also stop them) ...
+    // ... except the hidden map drive: a driving key on the open full-screen map starts it (startMapDrive below)
+    if (!(pauseBy.has('map') && !pauseBy.has('load') && minimap?.overview && MAP_DRIVE_KEYS.has(driveKey(e)))) return;
+    startMapDrive();
+  }
+  keys.add(driveKey(e));
+  if (e.key.startsWith('Arrow')) e.preventDefault();
+  const k = e.key.toLowerCase();
+  if (k === 'v') { cam.headUp = !cam.headUp; camReset(); }
+  if (k === 'r') restart();
+  if (k === 'm') nextMood();
+  if (k === 'b') setVehicle(vehicle.specName === 'car' ? 'bus' : 'car:' + carPaint);   // car <-> bus, menu follows
+  if (k === 'f') { wallViz.visible = !wallViz.visible; pitViz.visible = wallViz.visible; walls?.setDebug(wallViz.visible); clutter?.setDebug(wallViz.visible); }
+  if (k === 'c') setCollision(!collision);
+  if (k === 'u' && !e.repeat) edge.turnAround();   // turn around (js/edge.js)
+  if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) doJump(); }   // bouncy hop: frees a stuck car
+});
+function restart() { endSinking(); endJump(); rescuerExit = null; rescuer.visible = false; sbahn?.setActive(false); tunnels?.setActive(false); roofs?.setActive(false); vehicle.reset(S.x, S.z, S.heading); camReset(); carGround.reset(); safe.length = 0; }
+$('restart').addEventListener('click', (e) => { restart(); e.currentTarget.blur(); });
+const MOODS = ['', 'day', 'moon', 'snow'];   // owner: no 'night' (the Miami evening), the moon is the night
+const moodNow = mood ? mood.name : '';
+for (const m of MOODS) $('moodSel').add(new Option('Mood: ' + (m || 'off'), m, false, m === moodNow));
+function setMood(next) {
+  if (next === moodNow) return;
+  const p = vehicle.getPosition(), u = new URL(location.href);
+  if (next) u.searchParams.set('mood', next); else u.searchParams.delete('mood');
+  try { sessionStorage.setItem('berlinDrive.resume', JSON.stringify(
+    { level: LEVEL, kind: vehicle.specName, x: p.x, z: p.y, h: vehicle.getHeading(), sbahn: !!sbahn?.active, tunnel: !!tunnels?.active, roof: !!roofs?.active })); } catch { /* no storage */ }
+  location.href = u.href;
+}
+const nextMood = () => setMood(MOODS[(MOODS.indexOf(moodNow) + 1) % MOODS.length]);
+$('moodSel').addEventListener('change', (e) => setMood(e.target.value));
+$('moodSel').addEventListener('keydown', (e) => e.preventDefault());   // arrows drive, not pick
+function setSpeedLimit(kmh, save = true) {
+  speedLimitKmh = Math.max(0, +kmh || 0);
+  applySpeedLimit();
+  if (save) store.set('berlinDrive.speedLimit', String(speedLimitKmh));
+  const sel = $('speedSel');
+  if (![...sel.options].some((o) => +o.value === speedLimitKmh))   // e.g. ?maxspeed=40
+    sel.add(new Option('Speed: ' + speedLimitKmh, speedLimitKmh));
+  sel.value = String(speedLimitKmh);
+}
+for (const v of SPEED_CHOICES) $('speedSel').add(new Option('Speed: ' + (v || 'free'), v));
+setSpeedLimit(speedLimitKmh, false);
+$('speedSel').addEventListener('change', (e) => { setSpeedLimit(e.target.value); e.target.blur(); });
+$('speedSel').addEventListener('keydown', (e) => e.preventDefault());   // arrows drive, not pick
+// vehicle menu (and B): swap in place - same position, heading and velocity; only the paint
+// changes when car stays car. Ignored during a bear rescue (the scripted pose owns the car).
+// S-Bahn rails, tunnels (js/tunnels.js re-masks a new vehicle), mid-air and a balloon ride
+// take the swap like B always did.
+function setVehicle(choice) {
+  const sel = $('vehicleSel');
+  if (!VEHICLE_CHOICES.includes(choice) || sinking) { sel.value = vehicleChoice; return false; }
+  const kind = choice === 'bus' ? 'bus' : 'car';
+  if (kind === 'car') paintCar(choice.slice(4));
+  vehicleChoice = choice; sel.value = choice;
+  store.set('berlinDrive.vehicle', choice);
+  if (kind !== vehicle.specName) {
+    const p = vehicle.getPosition(), h = vehicle.getHeading();
+    const lv = vehicle.body.GetLinearVelocity(), vx = lv.x, vy = lv.y, w = vehicle.body.GetAngularVelocity();
+    spawn(kind, p.x, p.y, h);
+    for (const b of [vehicle.body, ...vehicle.wheels.map((wh) => wh.body)]) b.SetLinearVelocity(new b2Vec2(vx, vy));
+    vehicle.body.SetAngularVelocity(w);
+  }
+  return true;
+}
+{
+  const sel = document.createElement('select');
+  sel.className = 'button'; sel.id = 'vehicleSel';
+  Object.assign(sel.style, { left: '454px', top: '12px', width: '120px', height: '30px' });
+  sel.title = 'vehicle and paint (B = car / bus)';
+  for (const c of VEHICLE_CHOICES) sel.add(new Option(c === 'bus' ? 'Bus' : 'Car – ' + c.slice(4), c));
+  $('speedSel').after(sel);
+  // the menu shows what is driving (a mood resume may bring the other kind back)
+  if (vehicle.specName === 'bus') vehicleChoice = 'bus';
+  else if (vehicleChoice === 'bus') vehicleChoice = 'car:' + carPaint;
+  sel.value = vehicleChoice;
+  sel.addEventListener('change', (e) => { setVehicle(e.target.value); e.target.blur(); });
+  sel.addEventListener('keydown', (e) => e.preventDefault());   // arrows drive, not pick
+}
+addEventListener('keyup', (e) => { keys.delete(e.key); const k = WASD[e.key.toLowerCase()]; if (k) keys.delete(k); });
+addEventListener('blur', () => keys.clear());
+// touch devices only (js/touch.js): steer / pedal pads + jump / map / balloon buttons send the same
+// keydown / keyup events as the keys above; balloon is declared further down (getter, read later)
+createTouch({ balloon: () => balloon });
+
+// ---------- water / pit: drive in -> sink or fall -> the Rescue Bear fishes the car out ----------
+// A pose is recorded every 0.5 s while on land; the car is put back on the
+// pose >= 2 s before it went in (on the road, before the quay edge / pit rim).
+// Water timeline (s): 0-0.6 fall in, 0.6-1.8 bear flies in, 1.8-2.4 line down,
+// 2.4-3.9 lift and carry, 3.9-4.4 set down -> control back, bear flies off.
+// Pit (kind 'pit', level.pit): the car rolls over the rim and drops under gravity
+// (PIT.g) onto the mesh floor of the pit, lands with a thud (squash), sits; the
+// bear's timeline then runs shifted by `shift` (fall + PIT.sit - RESCUE.arrive),
+// he lifts the car straight up out of the pit before carrying it to the road.
+const RESCUE = { arrive: 0.6, hover: 1.8, hook: 2.4, carry: 3.9, done: 4.4, exit: 1.2 };
+const PIT = { g: 16, dip: 0.75, minRun: 0.8, margin: 2, sit: 0.4, squash: 0.16 };   // minRun: x drop, so the chase camera sees over the near wall
+const safe = [];
+let sinking = null;   // { kind: 'water' | 'pit' | 'nodrive', t, x, z, h, hd, target, rest, shift, lx, lz; pit: dx, dz, D, T, vy0 }
+// no-drive zones (js/nodrive.js, e.g. the Holocaust memorial): the car on it -> kind 'nodrive':
+// stopped where it is, the bear arrives at once, lifts it straight up, sets it on the last safe
+// pose (>= 2 s back, on the street), facing away from the zone; no text on screen
+const noDrive = createNoDrive({ origin: level.origin, extent: level.extent });
+const respectLine = createRespectLine();
+function noDriveStart(sk) {
+  const z = noDrive.hit(sk.x, sk.z, sk.hd, vehicle.spec.wheelBase / 2 + 0.8, vehicle.spec.tread / 2 + 0.2) || noDrive.zones[0];
+  sk.zone = z; sk.rest = sk.h; sk.shift = -RESCUE.arrive;
+  if (z?.name === MEMORIAL) respectLine.trigger();   // the memorial only (not other zones); at most once per 20 s (js/respect.js)
+  const away = (s) => ({ ...s, h: Math.atan2(s.x - z.cx, -(s.z - z.cz)) });   // forward = (sin h, -cos h)
+  const clear = (s) => !noDrive.hit(s.x, s.z, s.h, vehicle.spec.wheelBase / 2 + 0.8, vehicle.spec.tread / 2 + 0.2);
+  const older = safe.filter((s) => s.t < (sk.target.t ?? -Infinity)).reverse();
+  sk.target = [sk.target, ...older].map(away).find(clear) ?? away(sk.target);   // turned round, the probe must not touch the zone
+  for (const b of [vehicle.body, ...vehicle.wheels.map((w) => w.body)]) { b.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0)); b.SetAngularVelocity(0); }
+}
+let rescuerExit = null, camFocus = null;
+const ease = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
+const lerp = (a, b, u) => a + (b - a) * u;
+// pit fall: straight on with the entry speed (at least minRun x the drop: a slow car
+// tumbles in rather than sliding down the near wall out of view; never through the
+// far wall), ballistic drop from street level h with initial vertical
+// speed vy0 (< 0 when landing from a jump) onto the pit floor there
+function pitFall(p, h, vy0) {
+  const v = vehicle.body.GetLinearVelocity(), sp = Math.hypot(v.x, v.y), hd = vehicle.getHeading();
+  const [dx, dz] = sp > 0.3 ? [v.x / sp, v.y / sp] : [Math.sin(hd), -Math.cos(hd)];
+  let run = 0;
+  for (let s = 0.5; s <= 60 && isPit(p.x + dx * s, p.y + dz * s); s += 0.5) run = s;
+  const maxRun = Math.max(0.5, run - PIT.margin);
+  let T = 1, D = 0, floor = h - 2;
+  for (let k = 0; k < 4; k++) {   // landing point <-> fall time
+    D = Math.min(Math.max(sp * T, PIT.minRun * (h - floor), 1), maxRun);
+    floor = pitFloorAt(p.x + dx * D, p.y + dz * D) ?? pitFloorAt(p.x, p.y) ?? h - 2;
+    T = (vy0 + Math.sqrt(vy0 * vy0 + 2 * PIT.g * Math.max(0.3, h - floor))) / PIT.g;
+  }
+  return { dx, dz, D, T, vy0, rest: floor, lx: p.x + dx * D, lz: p.y + dz * D, shift: T + PIT.sit - RESCUE.arrive };
+}
+function startSinking(p, entryTime, kind = 'water', vy0 = 0) {
+  const back = safe.filter((s) => entryTime - s.t >= 2);
+  const target = back.length ? back[back.length - 1] : safe.length ? safe[0] : { x: S.x, z: S.z, h: S.heading };
+  const h = carY;   // the mesh road the car leaves
+  sinking = { kind, t: 0, x: p.x, z: p.y, h, hd: vehicle.getHeading(), target, rest: h - 2.9, shift: 0, lx: p.x, lz: p.y };
+  if (kind === 'pit') Object.assign(sinking, pitFall(p, h, vy0));   // before endJump: reads the velocity
+  if (kind === 'nodrive') noDriveStart(sinking);   // js/nodrive.js: no sinking, bear comes at once, set down facing away
+  if (kind === 'sbahn' || kind === 'sbahnOut') sbahn.start(sinking, RESCUE.done);   // js/sbahn.js: own timeline (roll in, bear lift / carry down)
+  if (roofs.owns(kind)) roofs.start(sinking, RESCUE.done);   // js/roofs.js: fall off the roof / bear lift up / down
+  endJump();   // landed in the water / pit: the small bounces stop
+  vehicle.body.SetLinearDamping(2.5); vehicle.body.SetAngularDamping(2);
+  if (kind === 'water') { splash.position.set(p.x, h - 1.9, p.y); splash.visible = true; }
+}
+function endSinking() {
+  if (!sinking) return;
+  sinking = null; splash.visible = false; camFocus = null; carRoot.visible = true;   // (S-Bahn: hidden inside the station)
+  vehicle.body.SetLinearDamping(0); vehicle.body.SetAngularDamping(0);
+  if (vehicleObj) vehicleObj.scale.setScalar(1);   // pit landing squash
+}
+function respawnFromWater() {   // water and pit
+  const s = sinking.target, tip = rescuer.position.clone().addScaledVector(ROD_TIP, RESCUER_SCALE);
+  endSinking();
+  vehicle.reset(s.x, s.z, s.h); camReset(); carGround.reset(s.y);   // s.y: the safe pose's road height (js/ground.js acquires around it)
+  safe.length = 0;
+  rescuerExit = s.noBear ? null : { t: 0, tip, len: tip.y - ((s.y ?? groundNear(s.x, s.z)) + 1.6) };   // noBear: the S-Bahn garage cut (js/sbahn.js)
+}
+// visual car pose + rescuer while sinking.t runs (physics body waits in the water / pit)
+function rescueFrame() {
+  if (sinking.kind === 'sbahn' || sinking.kind === 'sbahnOut' || roofs.owns(sinking.kind)) {   // js/sbahn.js / js/roofs.js compute car, bear and camera focus
+    const q = roofs.owns(sinking.kind) ? roofs.pose(sinking) : sbahn.pose(sinking);
+    carRoot.position.set(q.x, q.y, q.z); carRoot.rotation.set(q.pitch ?? 0, -q.yaw, q.roll ?? 0, 'YXZ'); carRoot.visible = !q.gone;
+    camFocus = { x: q.fx, y: q.fz, h: q.fy };   // fy: roof fall / lift, the look point goes with the car (S-Bahn: none, street height)
+    if (q.tip) poseRescuer(new THREE.Vector3(q.tip[0], q.tip[1], q.tip[2]), q.line, sinking.t); else rescuer.visible = false;
+    return;
+  }
+  const sk = sinking, t = sk.t, tb = t - sk.shift, T = sk.target, gT = T.y ?? groundNear(T.x, T.z), pitK = sk.kind === 'pit', ndK = sk.kind === 'nodrive';
+  const rest = sk.rest;   // car height while waiting: water half under, pit on the floor
+  let x = sk.lx, z = sk.lz, y, yaw = sk.hd, dip, wob = 0, sq = 1;
+  if (pitK && tb < RESCUE.hook) {                            // over the rim, drop, thud, sit
+    const tf = Math.min(t, sk.T), k = tf / sk.T;
+    x = sk.x + sk.dx * sk.D * k; z = sk.z + sk.dz * sk.D * k;
+    if (t < sk.T) { y = Math.max(rest, sk.h + sk.vy0 * t - 0.5 * PIT.g * t * t); dip = PIT.dip * ease(Math.min(1, 2 * k)); }
+    else {                                                   // landed: nose drops back onto the wheels, squash
+      const s = t - sk.T;
+      y = rest; dip = PIT.dip * Math.max(0, 1 - s / 0.15);
+      sq = 1 - PIT.squash * Math.exp(-6 * s) * Math.cos(20 * s);
+    }
+  } else if (ndK && tb < RESCUE.hook) {                      // no-drive zone: stands still, no sinking
+    y = rest; dip = 0;
+  } else if (tb < RESCUE.arrive) {                           // over the edge, nose first
+    const k = t / RESCUE.arrive;
+    y = sk.h - 4.9 * t * t * 3; y = Math.max(y, rest); dip = 0.6 * k;
+  } else if (tb < RESCUE.hook) {                             // bobbing, half under
+    y = rest + 0.12 * Math.sin(t * 5); dip = 0.6;
+  } else if (tb < RESCUE.carry) {                            // up and over to the road
+    const r = (tb - RESCUE.hook) / (RESCUE.carry - RESCUE.hook), u = ease(r);
+    if (pitK || ndK) {                                       // pit / no-drive: straight up first, then over the rim
+      const uh = ease((r - 0.3) / 0.7);
+      x = lerp(sk.lx, T.x, uh); z = lerp(sk.lz, T.z, uh);
+      y = lerp(rest, gT + 0.4, ease(Math.min(1, r / 0.55))) + 3 * Math.sin(Math.PI * r);
+      yaw = sk.hd + wrapAngle(T.h - sk.hd) * uh; dip = 0;
+    } else {
+      x = lerp(sk.x, T.x, u); z = lerp(sk.z, T.z, u);
+      y = lerp(rest, gT + 0.4, u) + 9 * Math.sin(Math.PI * u);
+      yaw = sk.hd + wrapAngle(T.h - sk.hd) * u; dip = 0.6 * (1 - u);
+    }
+    wob = 0.18 * Math.sin(t * 9) * (1 - u);
+  } else {                                                   // set down
+    const u = ease((tb - RESCUE.carry) / (RESCUE.done - RESCUE.carry));
+    x = T.x; z = T.z; y = gT + 0.4 * (1 - u); yaw = T.h; dip = 0;
+  }
+  carRoot.position.set(x, y, z);
+  carRoot.rotation.set(-dip, -yaw, wob, 'YXZ');
+  if (vehicleObj) vehicleObj.scale.set(1 + 0.5 * (1 - sq), sq, 1 + 0.5 * (1 - sq));
+  camFocus = pitK ? { x, y: z, h: Math.min(y, groundNear(x, z)) } : { x, y: z };   // pit: camera follows the car down (never above the street)
+  // rescuer: rod tip above the car roof (pit: at least 12 m above the street)
+  const hoverY = pitK ? Math.max(rest + 18.9, sk.h + 12) : rest + 18.9, lineLen = hoverY - rest - 1.6;
+  const roof = y + 1.6, hoverTip = new THREE.Vector3(x, hoverY, z);
+  if (tb < RESCUE.arrive) rescuer.visible = false;
+  else if (tb < RESCUE.hover) {
+    const u = ease((tb - RESCUE.arrive) / (RESCUE.hover - RESCUE.arrive));
+    const from = new THREE.Vector3(x - 30, hoverY + 42, z + 25);
+    poseRescuer(from.lerp(hoverTip, u), 1, t);
+  } else if (tb < RESCUE.hook) {
+    const u = ease((tb - RESCUE.hover) / (RESCUE.hook - RESCUE.hover));
+    poseRescuer(hoverTip, lerp(1, hoverTip.y - roof, u), t);
+  } else {
+    poseRescuer(new THREE.Vector3(x, roof + lineLen, z), lineLen, t);   // fixed line while carrying
+  }
+  if (!pitK && !ndK) { splash.scale.setScalar(1 + t * 5); splash.material.opacity = Math.max(0, 0.9 - t * 0.45); }
+}
+function rescuerExitFrame(dt) {
+  const e = rescuerExit; e.t += dt;
+  const u = ease(e.t / RESCUE.exit);
+  const tip = e.tip.clone().add(new THREE.Vector3(25 * u, 45 * u, -20 * u));
+  poseRescuer(tip, Math.max(0.5, e.len * (1 - u * 1.5)), performance.now() / 1000);
+  if (e.t >= RESCUE.exit) { rescuerExit = null; rescuer.visible = false; }
+}
+
+// ---------- jump (Space / berlinDrive.jump()): a bouncy hop that frees a stuck car ----------
+// Box2D is flat, so the hop is a height offset on the drawn car with its own
+// gravity (~1.3 m, 0.63 s). In the air the car's own fixtures are sensors (they
+// pass through walls, trunks, stalls; the world's bodies are not touched, so the
+// obstacle switch keeps its state) and the tyres have no grip (vehicle.airborne):
+// the 2D velocity carries on. Standing (nearly) still it gets a push away from
+// what it touches. Touching down inside a collider, a building footprint or an
+// obstacle -> another hop toward the nearest free spot, until it lands clear;
+// then 1-2 small visual bounces with a squash. No second jump in mid-air (a new
+// one is allowed during the small landing bounces, the wheels are down then).
+const JUMP = { g: 26, v0: 9.6, rest: 0,   // 1.8 m hop, clean landing (rest > 0 = rebounds; owner: none)
+                minV: 1.2, push: 3.5, escapeV: 6, maxDrift: 12, maxEscapes: 20 };
+const ESC_AIR_MAX = 1.2;   // s: an escape / hop-out is one hop of up to this air time (~4.7 m high, ~14 m at maxDrift)
+const b2Body = Box2D.Dynamics.b2Body;
+// jump = { y, vy, air, escapes } ; squash = landing/take-off spring on the model
+const squash = { t: 9, a: 0 };
+const clutterOn = () => clutterBody.IsActive();   // the obstacle switch deactivates trunks + obstacles
+// point in polygon, even-odd (unused since the small level's wall loops are gone; kept as a helper)
+const loopBox = new WeakMap();
+function inPoly(x, z, loop) {
+  let b = loopBox.get(loop);
+  if (!b) {
+    b = [Infinity, Infinity, -Infinity, -Infinity];
+    for (const [px, pz] of loop) { b[0] = Math.min(b[0], px); b[1] = Math.min(b[1], pz); b[2] = Math.max(b[2], px); b[3] = Math.max(b[3], pz); }
+    loopBox.set(loop, b);
+  }
+  if (x < b[0] || x > b[2] || z < b[1] || z > b[3]) return false;
+  let c = false;
+  for (let i = 0, j = loop.length - 1; i < loop.length; j = i++) {
+    const [xi, zi] = loop[i], [xj, zj] = loop[j];
+    if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) c = !c;
+  }
+  return c;
+}
+function insideBuilding(x, z) {
+  return !!walls?.inside(x, z);   // OSM footprints minus passages (js/walls.js; false in S-Bahn rails mode)
+}
+function insideFootprint(x, z) {
+  if (insideBuilding(x, z)) return true;          // buildings always count
+  if (!clutterOn()) return false;
+  return !!clutter?.inside(x, z);                 // trunks + obstacles (js/clutter.js; false in S-Bahn rails mode)
+}
+// does the car body at (x, z, heading h) overlap any static, solid fixture?
+// (inactive bodies are not in the broadphase: with obstacles off trunks/stalls do not overlap)
+function overlapsWorld(x, z, h) {
+  const shape = vehicle.body.GetFixtureList().GetShape();
+  const xf = new Box2D.Common.Math.b2Transform(new b2Vec2(x, z), Box2D.Common.Math.b2Mat22.FromAngle(h));
+  const r = vehicle.spec.bodyLength / 2 + 1, aabb = new Box2D.Collision.b2AABB();
+  aabb.lowerBound.Set(x - r, z - r); aabb.upperBound.Set(x + r, z + r);
+  let hit = false;
+  world.QueryAABB((f) => {
+    const b = f.GetBody();
+    if (b.GetType() !== b2Body.b2_staticBody || f.IsSensor()) return true;
+    hit = Box2D.Collision.Shapes.b2Shape.TestOverlap(shape, xf, f.GetShape(), b.GetTransform());
+    return !hit;
+  }, aabb);
+  return hit;
+}
+const spotClear = (x, z, h) => !overlapsWorld(x, z, h) && !insideFootprint(x, z)
+  && !walls?.hits(x, z, h, vehicle.spec.bodyLength / 2, vehicle.spec.bodyWidth / 2);   // streamed walls: also where no fixtures are built yet
+// nearest clear spot (rings of 16 directions out to 40 m; on a ring the one
+// nearest to the last safe pose), else the last safe pose / the spawn
+function findFree(x, z, h) {
+  const ref = safe.length ? safe[safe.length - 1] : { x: S.x, z: S.z };
+  for (let r = 1.5; r <= 40; r += 1.5) {
+    let best = null, bd = Infinity;
+    for (let k = 0; k < 16; k++) {
+      const a = (k / 16) * 2 * Math.PI, cx = x + r * Math.cos(a), cz = z + r * Math.sin(a);
+      if (isWater(cx, cz) || isPit(cx, cz) || !spotClear(cx, cz, h)) continue;
+      const d = Math.hypot(cx - ref.x, cz - ref.z);
+      if (d < bd) { bd = d; best = { x: cx, z: cz }; }
+    }
+    if (best) return best;
+  }
+  return ref;
+}
+// direction away from whatever the car (body + wheels) touches: summed contact normals
+function awayFromContacts() {
+  let nx = 0, nz = 0;
+  const wm = new Box2D.Collision.b2WorldManifold();
+  for (const b of [vehicle.body, ...vehicle.wheels.map((w) => w.body)]) {
+    for (let e = b.GetContactList(); e; e = e.next) {
+      const c = e.contact;
+      if (!c.IsTouching() || e.other.GetType() !== b2Body.b2_staticBody) continue;
+      c.GetWorldManifold(wm);
+      const s = c.GetFixtureA().GetBody() === b ? -1 : 1;   // normal points A -> B
+      nx += s * wm.m_normal.x; nz += s * wm.m_normal.y;
+    }
+  }
+  const l = Math.hypot(nx, nz);
+  return l > 1e-6 ? [nx / l, nz / l] : null;
+}
+function doJump() {
+  if (sinking || jump?.air || edge.turning) return false;
+  const v = vehicle.body.GetLinearVelocity();
+  if (v.Length() < 1.5) {   // stuck / standing: nudge away from the contact, else toward the last safe pose, else backwards
+    const p = vehicle.getPosition(), h = vehicle.getHeading();
+    let d = awayFromContacts();
+    const s = safe.length ? safe[safe.length - 1] : null;
+    if (!d && s && Math.hypot(s.x - p.x, s.z - p.y) > 1.5) { const l = Math.hypot(s.x - p.x, s.z - p.y); d = [(s.x - p.x) / l, (s.z - p.y) / l]; }
+    if (!d) d = [-Math.sin(h), Math.cos(h)];
+    vehicle.body.SetLinearVelocity(new b2Vec2(v.x + d[0] * JUMP.push, v.y + d[1] * JUMP.push));
+  }
+  const p = vehicle.getPosition();   // take-off point, if clear: a hop into a building goes back out there (no courtyard traps)
+  const from = spotClear(p.x, p.y, vehicle.getHeading()) ? { x: p.x, z: p.y } : null;
+  jump = { y: jump ? jump.y : 0, vy: JUMP.v0 * (tunnels?.active ? 0.7 : 1), air: true, escapes: 0, from };   // tunnel: a small hop (~0.9 m)
+  vehicle.setAirborne(true);
+  squash.t = 0; squash.a = -0.08;   // stretch on take-off
+  return true;
+}
+function endJump() {
+  if (jump?.air) vehicle.setAirborne(false);
+  jump = null; squash.t = 9;
+  if (vehicleObj) vehicleObj.scale.setScalar(1);
+}
+function jumpStep(dt) {
+  squash.t += dt;
+  if (!jump) return;
+  jump.vy -= JUMP.g * dt; jump.y += jump.vy * dt;
+  if (jump.y > 0) return;
+  jump.y = 0;
+  const impact = -jump.vy;
+  squash.t = 0; squash.a = Math.min(0.06, 0.008 * impact);   // just a slight dip of the suspension
+  if (jump.air) {
+    const p = vehicle.getPosition(), h = vehicle.getHeading();
+    // came down over a pit: no escape hop, the fall goes on from street level with the jump's speed
+    if (isPit(p.x, p.y)) { startSinking(p, simTime, 'pit', -impact); return; }
+    if (!tunnels?.active && !roofs?.active && !spotClear(p.x, p.y, h)) {          // landed in a wall / footprint / stall: hop on toward free space (not in a tunnel: the surface above is no obstacle; not on a roof: off the deck = fall, js/roofs.js)
+      const last = ++jump.escapes > JUMP.maxEscapes;
+      // inside a building: back toward the take-off point; on a wall edge / stall / trunk:
+      // the nearest free spot; after maxEscapes bounces: near the spawn
+      const t = last ? findFree(S.x, S.z, h)
+        : jump.from && insideBuilding(p.x, p.y) ? jump.from : findFree(p.x, p.y, h);
+      // one clean hop that reaches the spot (longer hop for a longer way, drift <= maxDrift up to ESC_AIR_MAX s)
+      // instead of a row of short hops capped at maxDrift
+      const dx = t.x - p.x, dz = t.z - p.y, d = Math.hypot(dx, dz);
+      const air = Math.max(2 * JUMP.escapeV / JUMP.g, Math.min(ESC_AIR_MAX, d / JUMP.maxDrift)), sp = d / air;
+      vehicle.body.SetLinearVelocity(new b2Vec2(d > 1e-6 ? dx / d * sp : 0, d > 1e-6 ? dz / d * sp : 0));
+      vehicle.body.SetAngularVelocity(0);
+      if (last) jump.escapes = 0;
+      jump.vy = JUMP.g * air / 2;
+      return;
+    }
+    jump.air = false; vehicle.setAirborne(false);   // wheels down: grip and collisions back
+  }
+  jump.vy = impact * JUMP.rest;
+  if (jump.vy < JUMP.minV) jump = null;
+}
+
+// ---------- map edge (js/edge.js): glass wall on the level border, soft cushion, U = turn around ----------
+const edge = createEdge({ extent: level.extent, groundAt, vehicle: () => vehicle, busy: () => !!sinking, endJump,
+                          spotClear, isWater: (x, z) => !sbahn?.active && !tunnels?.active && !roofs?.active && isWater(x, z), isPit });   // U on the viaduct: the Spree below is no obstacle
+// ---------- easter egg (js/sbahn.js): Stadtbahn - secret door at Jannowitzbruecke, the car drives on the viaduct ----------
+sbahn = createSbahn({ data: sbahnData, scene, world, vehicle: () => vehicle, edge,
+                      place: (x, z, h) => window.berlinDrive.teleport(x, z, h) });
+if (resume?.sbahn && resume.level === LEVEL && sbahn.resume(resume.x, resume.z)) carGround.reset();   // mood switch on the deck: stay on it
+// ---------- road tunnels (js/tunnels.js): portal faces switch tunnel mode, corridor walls, outline through the ground ----------
+tunnels = createTunnels({ data: tunnelData, world, vehicle: () => vehicle, edge, ghostMat, carY: () => carY,   // carY: a car on the street above a tube is never guided
+                         place: (x, z, h) => window.berlinDrive.teleport(x, z, h) });
+if (resume?.tunnel && resume.level === LEVEL && tunnels.resume(resume.x, resume.z)) carGround.reset();   // mood switch in a tunnel: stay in it
+// ---------- easter egg (js/roofs.js): roof mode - bear lift on Paul-Loebe-Allee onto the Bundestag roof, deck height, roof boxes, fall off the edge ----------
+roofs = createRoofs({ data: roofData, scene, world, vehicle: () => vehicle, edge, isWater: (x, z) => isWater(x, z), groundAt,
+                      place: (x, z, h) => window.berlinDrive.teleport(x, z, h) });
+if (resume?.roof && resume.level === LEVEL && roofs.resume(resume.x, resume.z)) carGround.reset();   // mood switch on a roof: stay on it
+// ---------- easter egg (js/balloon.js): Weltballon, own scene drawn after the car, platform = own static body ----------
+const balloon = createBalloon({ level, groundAt, world, mood, camera, vehicle: () => vehicle, sunOffset: SUN_OFFSET,   // its ground shadow falls like the car's
+                                busy: () => !!sbahn?.active || !!tunnels?.active || !!roofs?.active });   // car elsewhere: cannot cut the cable
+// ---------- easter eggs (js/eggs.js): football (ball, goals) + Berlin bear hunt, from levels/<name>/eggs.json
+// (build_eggs.py); own Box2D bodies (always on), counter button #eggs; loaded on the side, a failure never stops the game ----------
+let eggs = null;
+import('./js/eggs.js').then((m) => m.createEggs({ scene, world, level, base, groundAt, groundNear, isWater, isPit, mood, counterEl: $('eggs') }))
+  .then((e) => { eggs = e; }).catch((e) => console.warn('eggs off:', e));
+// ---------- ambient (js/doves.js): now and then a pair of white doves crosses the view; own scene drawn after the car ----------
+let doves = null;
+import('./js/doves.js').then((m) => { doves = m.createDoves({ camera, groundAt, mood }); }).catch((e) => console.warn('doves off:', e));
+// ---------- street dust (js/dust.js): puffs at the rear wheels when the car pulls away, brakes hard, turns, lands, hits; own scene after the car ----------
+let dust = null;
+import('./js/dust.js').then((m) => { dust = m.createDust({ mood, carScale: CAR_SCALE, car: {
+  get vehicle() { return vehicle; }, get y() { return carY; }, get air() { return !!jump?.air; }, get vy() { return jump ? jump.vy : 0; },
+  get off() { return !!sinking || !!tunnels?.active || !!edge?.turning; }, get under() { return !!tunnels?.active; }, get rail() { return !!sbahn?.active; },
+} }); }).catch((e) => console.warn('dust off:', e));
+// ---------- skid marks (js/skid.js): dark strips under sliding tyres (dust's triggers), fade over ~10 s; drawn in the shadow pass ----------
+let skid = null;
+import('./js/skid.js').then((m) => { skid = m.createSkid({ scene: shadowScene, mood, carScale: CAR_SCALE, car: {
+  get vehicle() { return vehicle; }, get y() { return carY; }, get air() { return !!jump?.air; }, get vy() { return jump ? jump.vy : 0; },
+  get off() { return !!sinking || !!tunnels?.active || !!edge?.turning || !!rescuerExit; }, get under() { return !!tunnels?.active; }, get rail() { return !!sbahn?.active; },
+} }); }).catch((e) => console.warn('skid marks off:', e));
+// ---------- area sign (js/areasign.js, levels/<name>/areas.json from build_areas.py): Berlin street-name plate top centre on entering a quarter ----------
+let areaSign = null;
+import('./js/areasign.js').then((m) => { areaSign = m.createAreaSign({ base, intro: loading }); }).catch((e) => console.warn('area sign off:', e));
+// ---------- sights (js/sights.js, levels/<name>/sights.json from build_sights.py): debt clock + stork's nest, no colliders ----------
+let sights = null;
+import('./js/sights.js').then((m) => m.createSights({ scene, base, mood })).then((s) => { sights = s; }).catch((e) => console.warn('sights off:', e));
+// ---------- building walls on a streamed level (js/walls.js): loaded after start; wallStep() per physics step builds the
+// Box2D cells around the car (always on, not the Obstacles switch; off in S-Bahn rails mode, the car is on the viaduct deck) ----------
+let inWallT = 0;
+function wallStep(dt) {
+  const p = vehicle.getPosition();
+  walls.update(p.x, p.y, !!sbahn?.active || !!tunnels?.active || !!roofs?.active);
+  // truly enclosed on the ground for > 1.5 s (slipped through a gap, a landing the jump could not fix): ONE hop
+  // straight to the nearest free spot. Pressing against a wall never counts (the car can reverse away).
+  if (!sinking && !jump?.air && !edge.turning && !sbahn?.active && !tunnels?.active && enclosed(p.x, p.y)) {
+    if ((inWallT += dt) > 1.5) { inWallT = 0; hopOut(); }
+  } else inWallT = 0;
+}
+// centre in a footprint and either no wall contact (nothing to reverse away from) or all four corners inside too
+function enclosed(x, z) {
+  if (!walls.inside(x, z)) return false;
+  if (!vehicle.wallContact) return true;
+  const h = vehicle.getHeading(), fx = Math.sin(h), fz = -Math.cos(h);
+  const L = 0.8 * vehicle.spec.bodyLength / 2, W = 0.8 * vehicle.spec.bodyWidth / 2;
+  for (const [a, b] of [[L, W], [L, -W], [-L, W], [-L, -W]]) if (!walls.inside(x + fx * a - fz * b, z + fz * a + fx * b)) return false;
+  return true;
+}
+function hopOut() {
+  const p = vehicle.getPosition(), t = findFree(p.x, p.y, vehicle.getHeading());
+  if (!doJump()) return;
+  const dx = t.x - p.x, dz = t.z - p.y, d = Math.hypot(dx, dz);
+  const air = Math.max(2 * JUMP.v0 / JUMP.g, Math.min(ESC_AIR_MAX, d / JUMP.maxDrift)), sp = d / air;
+  vehicle.body.SetLinearVelocity(new b2Vec2(d > 1e-6 ? dx / d * sp : 0, d > 1e-6 ? dz / d * sp : 0));
+  vehicle.body.SetAngularVelocity(0);
+  jump.vy = JUMP.g * air / 2;
+}
+import('./js/walls.js').then((m) => m.createWalls({ base, world, groundAt, scene, THREE, clear: bridges?.inDeck }))   // nothing on a bridge deck
+  .then((w) => {
+    if (!w) return;
+    walls = w;
+    const p = vehicle.getPosition(), h = vehicle.getHeading();
+    walls.update(p.x, p.y, !!sbahn?.active || !!tunnels?.active || !!roofs?.active);
+    walls.setDebug(wallViz.visible);
+    if (!hasColliders) $('collide').title = 'Buildings are always solid. Street obstacles and tree trunks are not available on this level yet.';
+    // spawn / ?at= / mood resume / teleport before the walls were in: inside a building -> nearest clear spot
+    if (!sbahn?.active && !tunnels?.active && !roofs?.active && !sinking && !spotClear(p.x, p.y, h)) { const f = findFree(p.x, p.y, h); window.berlinDrive.teleport(f.x, f.z, h); }
+  }).catch((e) => console.warn('walls off:', e));
+// ---------- street clutter on a streamed level (js/clutter.js): trunks + mesh obstacles, same cells as the walls;
+// off with the Obstacles switch (clutterOn) and in S-Bahn rails mode; null on a level without clutter.json ----------
+const clutterOff = () => !clutterOn() || !!sbahn?.active || !!tunnels?.active || !!roofs?.active;
+if (hasClutter) import('./js/clutter.js').then((m) => m.createClutter({ base, world, groundAt, scene, THREE }))
+  .then((c) => {
+    if (!c) return;
+    clutter = c;
+    const p = vehicle.getPosition();
+    clutter.update(p.x, p.y, clutterOff());
+    clutter.setDebug(wallViz.visible);
+  }).catch((e) => console.warn('clutter off:', e));
+
+// pause on / off (menu, overview map); 'load' is released by the loading screen's end (below)
+function setPause(why, on) {
+  const was = pauseBy.size > 0;
+  if (on) pauseBy.add(why); else pauseBy.delete(why);
+  keys.clear();   // nothing held carries over (no accelerating after resume)
+  if (was && !pauseBy.size) { last = performance.now(); acc = 0; }   // frame clock restarts: no big dt
+}
+// ---------- easter egg: driving on the map screen (hidden, no hint) ----------
+// The overview opens paused ('map'). A driving key (arrows / WASD) on it lifts that pause: the
+// game runs as usual (same car, physics, walls, speed limit, obstacles), frame() steps physics
+// but renders no 3D (mapDrive), the map follows the car (js/minimap.js setDriving). Only the
+// driving keys, Space and the map's own keys pass on the map (js/menu.js). Any sequence that
+// starts (rescue, pit, no-drive, S-Bahn door, roof lift, tunnel in / out, edge turn, balloon)
+// closes the map at once. Closing the map: back in the 3D view at the car's new place (from the
+// menu's "Karte" too: the menu was closed when the drive began).
+const MAP_DRIVE_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+let mapDrive = null;   // { tun, sb, roof } modes at the start (a change = a sequence: the map closes)
+function startMapDrive() {
+  if (mapDrive) return;
+  if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();   // Space must not press a map button
+  if (menu?.isOpen) menu.close();   // opened via "Karte": after driving, closing the map returns to the game
+  mapDrive = { tun: !!tunnels?.active, sb: !!sbahn?.active, roof: !!roofs?.active };
+  setPause('map', false);   // honest: nothing paused now; clock restarts
+  minimap?.setDriving?.(true);
+}
+function mapDriveFrame() {   // per frame while map-driving, instead of the 3D part of frame()
+  if (sinking || edge.turning || balloon.riding || !!tunnels?.active !== mapDrive.tun || !!sbahn?.active !== mapDrive.sb || !!roofs?.active !== mapDrive.roof) {
+    minimap?.setOverview(false);   // sequences never run unseen
+    return;
+  }
+  const p = vehicle.getPosition(), h = vehicle.getHeading();
+  if (stream) { const v = vehicle.body.GetLinearVelocity(); stream.update({ x: p.x, z: p.y, vx: v.x, vz: v.y }); }   // the view is ready on return
+  camera.getWorldDirection(_viewDir);
+  minimap?.update(p.x, p.y, h, vehicle.speedKmh, true, Math.atan2(_viewDir.x, -_viewDir.z));
+  eggs?.update(null, { x: p.x, z: p.y, heading: h, kmh: vehicle.speedKmh, under: tunnels.active, roof: roofs.active ? roofs.route : null });   // bears are found on the map too
+}
+// ---------- menu slow motion (js/menu.js MENU_FX): one time scale read in frame() ----------
+// slowMo(to, seconds, done): eases timeScale to `to` over real seconds, then done(). Exactly 1 and
+// no work when no transition runs. Fixed-step physics stays fixed: only the accumulated time is
+// scaled. Opening: keys are dropped at once (the car coasts); closing starts from the current value.
+let timeScale = 1, tsAnim = null;   // { from, to, t0, ms, done }
+function slowMo(to, seconds, done) {
+  if (to === 0) keys.clear();
+  if (!(seconds > 0)) { timeScale = to; tsAnim = null; done?.(); return; }
+  tsAnim = { from: timeScale, to, t0: performance.now(), ms: seconds * 1000, done };
+}
+function stepTimeScale(now) {
+  const a = tsAnim, u = Math.min(1, Math.max(0, (now - a.t0) / a.ms)), e = u * u * (3 - 2 * u);
+  timeScale = a.from + (a.to - a.from) * e;
+  if (u >= 1) { timeScale = a.to; tsAnim = null; a.done?.(); }
+}
+function onOverview(on) {
+  if (on) { mapDrive = null; setPause('map', true); return; }
+  if (mapDrive) {   // map-driving ends: 3D again, clean clock, nothing held
+    mapDrive = null; minimap?.setDriving?.(false);
+    keys.clear(); last = performance.now(); acc = 0;
+    return;
+  }
+  setPause('map', false); menu?.mapClosed();
+}
+let menu = null;   // js/menu.js, created at the bottom
+// ---------- loop: physics at a fixed 60 Hz step ----------
+const STEP = 1 / 60;
+let ICE_GRIP = +(params.get('icegrip') || 0.25), ICE_REAR = 0.7;   // tyre grip on frozen water (x normal; rear wheels x ICE_REAR): engine, brakes, cornering
+const AUTODRIVE = +(params.get('autodrive') || 0);   // seconds of full throttle (testing)
+let simTime = 0, acc = 0, last = performance.now();
+let heldPose = null;   // drawn pose of the parked car (stepOnce)
+let firstFrameSeen = false;
+function frame(now) {
+  if (isFrozen()) {   // menu / map: the picture stays, nothing moves; a resize redraws it once
+    last = now;
+    if (pausedRedraw) {   // resize, or a setting changed (paint, vehicle, camera sliders): same moment, new look
+      pausedRedraw = false;
+      if (!balloon.riding) updateCamera(0);
+      mood ? mood.render(drawPasses) : drawPasses();
+    }
+    requestAnimationFrame(frame);
+    return;
+  }
+  pausedRedraw = false;
+  let dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (tsAnim) stepTimeScale(now);
+  if (timeScale !== 1) dt *= timeScale;   // menu slow motion: game time (physics accumulator + every update(dt) below) runs slower
+  if (pauseBy.has('load')) {   // loading screen: no physics; the car sits on the mesh road as tiles arrive, the camera follows a teleport (walls arriving)
+    acc = 0;
+    { const p = vehicle.getPosition(), sp = vehicle.spec;
+      const g = carGround.update(p.x, p.y, vehicle.getHeading(), sp.wheelBase / 2, sp.tread / 2, STEP);
+      carY = g.y; gOff = carY - groundAt(p.x, p.y); vehicle.setAttitude(g.pitch, g.roll); }
+    updateCamera(0);
+    if (!firstFrameSeen) { firstFrameSeen = true; requestAnimationFrame(() => loading.firstFrame()); }
+  } else {
+    acc += dt;
+    while (acc >= STEP) {
+      stepOnce(keys);
+      acc -= STEP;
+    }
+  }
+  if (mapDrive) { mapDriveFrame(); requestAnimationFrame(frame); return; }   // map screen: physics only, no 3D render
+  balloon.update(dt);   // cycle, ride range; during a ride it takes the camera after updateCamera
+  doves?.update(dt, !!tunnels?.active);   // js/doves.js: after the camera is final; none in a tunnel
+  dust?.update(dt);   // js/dust.js: after the physics steps (vehicle + ride height final for the frame)
+  skid?.update(dt);   // js/skid.js: same moment as the dust; not called while paused, so marks do not age
+  if (sights) { const p = vehicle.getPosition(); sights.update(dt, p.x, p.y); }   // js/sights.js: clock digits + storks, only near the car
+  if (areaSign) { const p = vehicle.getPosition(); areaSign.update(dt, p.x, p.y, !!sinking || !!sbahn?.active || !!tunnels?.active || !!roofs?.active || !!edge?.turning || !!balloon?.riding, meshLoaded,
+    { name: minimap?.street || '', kind: minimap?.streetKind || '', kmh: vehicle.speedKmh }); }   // js/areasign.js: street plate (the minimap's street lookup), quiet during sequences
+  renderFrame();
+  requestAnimationFrame(frame);
+}
+function stepOnce(keys) {
+  {
+    const drive = !sinking;
+    vehicle.setSteeringLever(drive ? (keys.has('ArrowRight') ? 1 : 0) - (keys.has('ArrowLeft') ? 1 : 0) : 0);
+    vehicle.setThrottle(drive && (keys.has('ArrowUp') || simTime < AUTODRIVE) ? 1 : 0);
+    vehicle.setBrake(drive && keys.has('ArrowDown') ? 1 : 0);
+    simTime += STEP;
+    jumpStep(STEP);
+    {
+      const p = vehicle.getPosition(), air = !!jump?.air;   // in the air: no sinking (flies over the Spree), no safe poses
+      const sbK = !sinking && !air && !edge.turning ? roofs.hit(p.x, p.y, vehicle.getHeading(), vehicle.spec.bodyLength / 2)   // roof lift / exit / off the edge (js/roofs.js)
+        ?? (roofs.active ? null : sbahn.hit(p.x, p.y, vehicle.getHeading(), vehicle.spec.bodyLength / 2)) : null;   // S-Bahn door / exit (js/sbahn.js)
+      if (sbK) startSinking(p, simTime, sbK);
+      else if (!sinking && !air && noDrive.zones.length && !tunnels.active && !roofs.active   // no-drive zone first (before water / pit / stele obstacles), on the ground only
+          && noDrive.hit(p.x, p.y, vehicle.getHeading(), vehicle.spec.wheelBase / 2 + 0.8, vehicle.spec.tread / 2 + 0.2)) startSinking(p, simTime, 'nodrive');
+      else if (!sinking && !air && isWater(p.x, p.y, carY) && !mood?.frozen && !sbahn.active && !tunnels.active && !roofs.active) startSinking(p, simTime);   // frozen: drive on the ice; on the viaduct: over the Spree
+      else if (!sinking && !air && isPit(p.x, p.y)) startSinking(p, simTime, 'pit');   // over the rim: falls in
+      else if (!sinking && !air && (!safe.length || simTime - safe[safe.length - 1].t >= 0.5) && !walls?.inside(p.x, p.y) && !tunnels.active && !roofs.active) {   // never a safe pose inside a building (roof: own checkpoints)
+        safe.push({ t: simTime, x: p.x, z: p.y, h: vehicle.getHeading(), y: carY });   // y: mesh road (set-down height)
+        if (safe.length > 20) safe.shift();
+      }
+      if (sinking && (sinking.t += STEP) > RESCUE.done + sinking.shift) { const k = sinking.kind; respawnFromWater(); sbahn.landed(k); roofs.landed(k); }   // landed: rails / roof mode on / off
+    }
+    // attitude: from the mesh road at the axles / sides (carGround, after the step below)
+    // ice grip per wheel (rear lower: the tail steps out, spins come easily)
+    if (ice) vehicle.wheels.forEach((w, i) => { const c = w.body.GetWorldCenter(); w.grip = iceLevelAt(c.x, c.y) !== null && !sbahn.active && !tunnels.active && !roofs.active ? ICE_GRIP * (i >= 2 ? ICE_REAR : 1) : 1; });
+    vehicle.noHold = !!sinking || edge.turning;   // parking hold (js/vehicle.js HOLD) off during scripted moves
+    vehicle.update(STEP);
+    if (walls) wallStep(STEP);   // streamed building walls near the car (js/walls.js), before the step (world unlocked)
+    if (bridges) { const p = vehicle.getPosition(); bridges.update(p.x, p.y, carY, !!sbahn?.active || !!tunnels?.active || !!roofs?.active || !!sinking); }   // deck rails near the car, at deck level (js/bridges.js)
+    if (clutter) { const p = vehicle.getPosition(); clutter.update(p.x, p.y, clutterOff()); }   // streamed trunks + obstacles (js/clutter.js)
+    world.Step(STEP, 8, 3);
+    world.ClearForces();
+    edge.step(STEP);   // map edge: cushion, trail, turn-around animation (js/edge.js)
+    sbahn.step();   // rails mode: the car centre stays on the viaduct deck (js/sbahn.js)
+    tunnels.step();   // road tunnels: portal faces, corridor walls, clamp (js/tunnels.js)
+    roofs.step(!!sinking || !!jump?.air || edge.turning);   // roof mode: car only hits the roof boxes, checkpoints (js/roofs.js)
+    vehicle.lateUpdate(STEP);
+    if (!sinking) {   // road height + attitude at the new position (the next step's slope force)
+      const p = vehicle.getPosition(), sp = vehicle.spec;
+      const g = carGround.update(p.x, p.y, vehicle.getHeading(), sp.wheelBase / 2, sp.tread / 2, STEP);
+      // parked (vehicle.held): the drawn pose stays frozen; only a real surface change (a tile streamed in
+      // under the car: > 10 cm or > 2 deg) is taken over, so a standing car never bobs or tilts
+      const keep = vehicle.held && heldPose && Math.abs(g.y - heldPose.y) < 0.1
+        && Math.abs(g.pitch - heldPose.pitch) < 0.035 && Math.abs(g.roll - heldPose.roll) < 0.035;
+      if (!keep) {
+        carY = g.y; gOff = carY - groundAt(p.x, p.y);
+        vehicle.setAttitude(g.pitch, g.roll);
+        heldPose = vehicle.held ? { y: g.y, pitch: g.pitch, roll: g.roll } : null;
+      }
+    }
+    updateCamera(STEP);
+  }
+}
+const _viewDir = new THREE.Vector3();
+function renderFrame() {
+  const p = vehicle.getPosition(), h = vehicle.getHeading();
+  const gy = carY;   // mesh road under the car (js/ground.js)
+  let cy = gy;
+  if (sinking) {
+    rescueFrame(); cy = carRoot.position.y;
+  } else {
+    // jump: height offset, nose up while rising / down while falling, squash spring on the model
+    const jy = (jump ? jump.y : 0) + edge.lift;   // edge.lift: turn-around swing
+    carRoot.position.set(p.x, gy + jy, p.y);
+    carRoot.rotation.set(vehicle.tilt + vehicle.impactPitch + (jump ? 0.1 * jump.vy / JUMP.v0 : 0), -h, vehicle.roll, 'YXZ');   // impactPitch: wall nose-dip (js/vehicle.js IMPACT)
+    const k = squash.t < 1.5 ? 1 - squash.a * Math.exp(-7 * squash.t) * Math.cos(22 * squash.t) : 1;
+    if (vehicleObj) vehicleObj.scale.set(1 + 0.5 * (1 - k), k, 1 + 0.5 * (1 - k));
+    cy = gy + jy;
+  }
+  const lift = Math.max(0, cy - gy) + 1.2 * CAR_SCALE;
+  {   // contact shadow on the ride plane under the car, gone once the wheels are ~fadeH up
+    const a = sinking || tunnels.active ? 0 : Math.exp(-Math.max(0, cy - gy) / CONTACT.fadeH);
+    contact.visible = a > 0.02;
+    contact.position.set(p.x, gy, p.y); contact.rotation.set(vehicle.tilt, -h, vehicle.roll, 'YXZ'); contact.scale.setScalar(CAR_SCALE);
+    contactBody.material.opacity = CONTACT.body * a; contactTyres.forEach((t) => { t.material.opacity = CONTACT.tyre * a; });
+    contactCore.material.opacity = WHEEL_LOOK.core * a;
+  }
+  shadow.visible = !sinking && !tunnels.active;   // tunnel: both shadows would paint onto the ground above
+  shadow.position.set(p.x + SUN_OFFSET[0] * lift, gy + 0.05, p.y + SUN_OFFSET[1] * lift);
+  shadow.rotation.y = -h;
+  {   // shadow stays on the ground, smaller and fainter with jump height
+    const jy = jump && !sinking ? jump.y : 0, k = 1 / (1 + 0.35 * jy);
+    shadow.scale.set(shadowBase.x * k, 1, shadowBase.z * k);
+    shadow.material.opacity = 1 / (1 + 0.6 * jy);
+  }
+  stretchShadow(h);   // reaches back to the footprint: no bright gap between a tyre and the sun blob
+  if (vehicleObj) {
+    const fl = vehicleObj.getObjectByName('WheelFL'), fr = vehicleObj.getObjectByName('WheelFR');
+    if (fl) fl.rotation.y = -vehicle.frontLAngle;
+    if (fr) fr.rotation.y = -vehicle.frontRAngle;
+    const t = performance.now(), v = vehicle.body.GetLinearVelocity();   // wheels roll with the forward speed (own clock: renderFrame has no dt)
+    const dtw = Math.min(0.1, (t - wheelClock) / 1000), fwd = v.x * Math.sin(h) - v.y * Math.cos(h); wheelClock = t;
+    spinWheels(vehicleObj, fwd, dtw);
+    leanBody(vehicleObj, sinking || jump ? 0 : fwd * vehicle.body.GetAngularVelocity(), dtw);   // lateral acceleration; level in the air / in sequences
+    updateBlinkers(vehicleObj, dtw, !!(sinking || rescuerExit || pauseBy.size || jump));   // blinkers: off in rescues / sequences / pauses
+  }
+  if (rescuerExit) rescuerExitFrame(1 / 60);
+  if (stream) { const v = vehicle.body.GetLinearVelocity(); stream.update({ x: p.x, z: p.y, vx: v.x, vz: v.y }); }
+  // speed line on the map HUD: empty during rescue / S-Bahn / roof sequences (README Rules) and while loading
+  camera.getWorldDirection(_viewDir);
+  minimap?.update(p.x, p.y, h, vehicle.speedKmh, true, Math.atan2(_viewDir.x, -_viewDir.z));   // throttled inside (~15 Hz); owner (2026-11-21): the speed is always shown, also 0; last: view direction (overview cone)
+  sbahn.frame(p.x, p.y, !!sinking);   // S-Bahn door / exit markers fade in near the car
+  roofs.frame(p.x, p.y, !!sinking);   // roof lift disc on the street / exit on the roof
+  tunnels.frame(p.x, p.y);   // tunnel outline fade (in a tunnel / near a portal)
+  eggs?.update(null, { x: p.x, z: p.y, heading: h, kmh: vehicle.speedKmh, under: tunnels.active, roof: roofs.active ? roofs.route : null });   // js/eggs.js: own clock; roof: street bears off, roof bears on (js/roofs.js)
+  mood ? mood.render(drawPasses) : drawPasses();   // a mood runs the same passes into its HDR buffer
+}
+function drawPasses() {
+  // 1) world  2) ghost: where the world hides the car, a faint silhouette shows
+  // through (depthFunc Greater)  3) the car, depth-tested (buildings hide it;
+  // the soft shadow ignores depth), drawn over its own ghost
+  renderer.autoClear = true; renderer.render(scene, camera);
+  // depth bias: pull the car 3 m toward the camera for the car passes, so the
+  // height model sitting up to ~1-2 m under the mesh road does not count as
+  // "hidden" (buildings still do); at ~85 m view distance the size change is ~3 %
+  const carPos = carRoot.position.clone();
+  carRoot.position.addScaledVector(camera.position.clone().sub(carPos).normalize(), 3);
+  // ghost first (tested against the world only), then the real car over it
+  renderer.autoClear = false;
+  tunnels.draw(renderer, camera);   // tunnel outline through the ground (no depth test, ghost colour)
+  renderer.render(shadowScene, camera);
+  const splashVis = splash.visible; splash.visible = false;
+  if (mood) mood.carFx.visible = false;   // sprites under the override material would draw as squares
+  if (!(sinking && sbahn.ghostOff)) { carScene.overrideMaterial = ghostMat; renderer.render(carScene, camera); carScene.overrideMaterial = null; }   // S-Bahn door: the car is really gone
+  splash.visible = splashVis;
+  if (mood) mood.carFx.visible = true;
+  renderer.render(carScene, camera);
+  carRoot.position.copy(carPos);
+  dust?.draw(renderer, camera);   // street dust: own scene, depth-tested (buildings hide it), no depth writes, no ghost; nothing while none lives
+  balloon.draw(renderer, camera);   // Weltballon: depth-tested, not an occluder, no ghost
+  doves?.draw(renderer, camera);   // doves: own scene, depth-tested against world + car, no ghost; nothing while none fly
+  edge.draw(renderer, camera);   // 4) map-edge glass over everything, depth-tested, no depth writes
+}
+// streamed level: place the camera, the game counts as loaded once the spawn view is in;
+// the loading screen follows the first view's tiles and lets go of the game when it ends
+loading.step('Die Stadt lädt …', 1);
+if (stream) { updateCamera(0); stream.idle().then(() => { meshLoaded = true; }); }
+requestAnimationFrame(frame);
+{
+  const waitEnd = () => {
+    if (loading.open) { setTimeout(waitEnd, 100); return; }
+    setPause('load', false);
+    let re = null;   // after "Auf Standard zurücksetzen": back on the settings page, defaults marked
+    try { re = sessionStorage.getItem('berlinDrive.reopen'); sessionStorage.removeItem('berlinDrive.reopen'); } catch { /* no storage */ }
+    if (re === 'settings') menu?.open('settings');
+  };
+  if (stream) loading.tiles(stream); else requestAnimationFrame(() => loading.done());
+  waitEnd();
+}
+
+// test hook (console / headless checks): berlinDrive.teleport(x, z, heading)
+window.berlinDrive = {
+  get vehicle() { return vehicle; }, isWater, iceLevelAt, get ice() { return ice; }, get iceGrip() { return ICE_GRIP; }, set iceGrip(v) { ICE_GRIP = +v; }, set iceRear(v) { ICE_REAR = +v; }, isPit, pitFloorAt, groundAt, level, mood,   // mood: live tuning, e.g. mood.set('fogDist', 400)
+  carGround, get carY() { return carY; }, groundNear, carRoot, shadow,
+  get contact() { return CONTACT; }, set contact(v) { Object.assign(CONTACT, v); fitContact(vehicleObj, vehicle.spec); },   // contact shadow tuning, e.g. berlinDrive.contact = { body: 0.7, tyre: 0.9 }
+  get blinkers() { return blinkersOn; }, setBlinkers,   // turn indicators on / off (saved as berlinDrive.blinkers; menu row)
+  get wheelLook() { return WHEEL_LOOK; },   // wheels + tight contact core, e.g. berlinDrive.wheelLook = { scale: 1.18, out: 0.06, tyre: 0.35, core: 0.55 }
+  set wheelLook(v) { Object.assign(WHEEL_LOOK, v); for (const m of Object.values(models)) { poseWheels(m); wheelTyres(m); } fitContact(vehicleObj, vehicle.spec); },
+  // car on the mesh road (js/ground.js): carGround.out / .samples / .opts
+  get ride() { return carGround.ride; }, set ride(v) { Object.assign(carGround.ride, v); },   // ride layer tuning, e.g. berlinDrive.ride = { lenDown: 4 } (js/ground.js)
+  // camera collision: setCamAvoid(false) off (saved), camAvoid, camCollider.opts / .frac / .solids(cam, car)
+  setCamAvoid, get camAvoid() { return camAvoid; }, camCollider: camCol, camera, camCarPt,
+  get camFrameFix() { return camFrameFix; }, get camKeepFrame() { return camKeepFrame; }, set camKeepFrame(v) { camKeepFrame = !!v; }, carNdcMax, cam, setCam,   // car-in-frame rule; cam.headUp, setCam('height', 30)
+  // run physics synchronously (frame-rate independent), e.g. simulate(3, ['ArrowUp'])
+  simulate(seconds, held = []) { const k = new Set(held); for (let i = 0; i < seconds / STEP; i++) stepOnce(k); renderFrame(); return this.state(); },
+  // n physics steps without rendering, each(i) after every step (camera invariants), e.g. steps(60, ['ArrowUp'], () => carNdcMax())
+  steps(n, held = [], each = null) { const k = new Set(held); for (let i = 0; i < n; i++) { stepOnce(k); each?.(i); } },
+  teleport(x, z, h) { endSinking(); endJump(); sbahn?.setActive(false); tunnels?.setActive(false); roofs?.setActive(false); vehicle.reset(x, z, h); camReset(); carGround.reset(); safe.length = 0; },
+  render() { renderFrame(); },
+  showDebug(v = true) { wallViz.visible = v; pitViz.visible = v; walls?.setDebug(v); clutter?.setDebug(v); },
+  get walls() { return walls; },
+  get clutter() { return clutter; },   // streamed trunks + obstacles (js/clutter.js): inside(x, z), stats(); null without clutter.json   // streamed building walls (js/walls.js): inside(x, z), hits(...), stats(); null without walls.json
+  // obstacle switch: setCollision(false) = trunks + mesh obstacles off, buildings stay (saved as berlinDrive.collision); stream: tile streamer or null
+  setCollision, get collision() { return collision; }, stream, get minimap() { return minimap || minimapStub; },
+  get intro() { return loading; },   // loading screen (js/loading.js; was the start screen): open, named, progress; hide() / show() do nothing
+  resetSettings,   // every setting to its default (progress kept), reload at the same spot
+  newGame,   // Neustart without the menu's question: progress (bears, balloon cut, saved position) cleared, reload
+  get loading() { return loading; }, get menu() { return menu; }, get paused() { return pauseBy.size > 0; }, get mapDrive() { return !!mapDrive; },   // Esc menu (js/menu.js): open(page), close()
+  get eggs() { return eggs; },   // football + bear hunt (js/eggs.js): items(), found(), reset(), ball, goals, placeBall(x, z, vx, vz)
+  get skid() { return skid; },   // skid marks (js/skid.js): opts (live), setEnabled(bool) (saved as berlinDrive.skid), clear(), enabled, laid
+  get dust() { return dust; },   // street dust (js/dust.js): puff(kind?, k?), setEnabled(bool) (saved as berlinDrive.dust), enabled, alive, rough, opts
+  get areaSign() { return areaSign; },   // street-name plate (js/areasign.js): show(name), opts (live tuning), state() (candidate, why, last decision)
+  get doves() { return doves; },   // white doves (js/doves.js): release(n?), setEnabled(bool) (saved as berlinDrive.doves), enabled, active, next, opts
+  // top speed km/h (0 = free), as the Speed dropdown: berlinDrive.speedLimit = 30 (saved)
+  get speedLimit() { return speedLimitKmh; }, set speedLimit(v) { setSpeedLimit(v); },
+  // bouncy hop (Space); false while sinking or already in the air. jumpState: { y, vy, air, escapes } or null
+  jump: () => doJump(), get jumpState() { return jump && { ...jump }; },
+  // map edge (js/edge.js): turnAround() = U; edge = { dist, gap, side, toward, opacity, hint, pulse, pushT, restT, turning, trail }
+  turnAround: () => edge.turnAround(), get edge() { return { ...edge.info }; }, edgeModule: edge,
+  balloon,   // Weltballon (js/balloon.js): position, height, phase, setPhase(s), items(), startRide(), riding; cutNow(), restore(), state
+  // no-drive zones (js/nodrive.js): zones [{ name, poly: [[x, z]...], box, cx, cz }], inside(x, z), hit(x, z, heading)
+  noDrive,
+  respectLine,   // "Respect is Everything." (js/respect.js): show() to try it, opts
+  // Stadtbahn (js/sbahn.js): sbahn.active (rails mode), enter(s | station name), exit(name?), route [[x, z]...], items()
+  get sbahn() { return sbahn; },
+  // road tunnels (js/tunnels.js): active (tunnel mode), guided, items() (portals), routes, enter(portal id | index), portals(), stats()
+  get tunnels() { return tunnels; },
+  // roof mode (js/roofs.js): active, enter(route | spot slug) = onto the roof now, exit() = down to the street, deckAt(x, z), checkpoints, items(), stats()
+  get roofs() { return roofs; },
+  bridges,   // bridges over water (js/bridges.js): items(), deckAt(x, z), ground(x, z, y), stats(); null without bridges.json
+  // easter-egg links (levels/<name>/spots.json): [{ slug, name, kind, url }]; spot(slug) = drive there now
+  spots: () => spots.map((p) => ({ slug: p.slug, name: p.name, kind: p.kind, url: spotUrl(p.slug) })),
+  spot(slug) { const q = spots.find((p) => p.slug === slug); if (!q) { console.warn('unknown spot', slug); return false; } if (q.roof) return roofs.enter(q.roof, { x: q.start.x, z: q.start.z, h: q.start.heading }); this.teleport(q.start.x, q.start.z, q.start.heading); return true; },
+  state() { const p = vehicle.getPosition(), ll = geoFrame.toLatLon(p.x, p.y); return { x: p.x, z: p.y, lat: ll.lat, lon: ll.lon, kmh: vehicle.speedKmh, sinking: !!sinking, sinkKind: sinking?.kind ?? null, rescueT: sinking ? sinking.t : null, carY: carRoot.position.y, pit: isPit(p.x, p.y), rescuer: rescuer.visible, water: isWater(p.x, p.y), shadow: shadow.visible, tunnel: !!tunnels?.active, meshLoaded, collision, stream: stream?.stats() }; },
+};
+// ?spot= on a roof (spots.json `roof`): onto the deck in roof mode (needs berlinDrive.teleport above)
+if (SPOT?.roof && !(resume && resume.level === LEVEL)) roofs.enter(SPOT.roof, SPOT);   // the spot's start pose on that deck
+
+// ---------- position broadcast ~4x/s + teleport from map.html (the owner's tool page; no longer linked from the game) ----------
+{
+  const bc = typeof BroadcastChannel === 'function' ? new BroadcastChannel('berlinDrive') : null;
+  // a map target inside a building / water / pit goes to the nearest clear spot (findFree, 40 m)
+  const clear = (x, z, h) => (isWater(x, z) || isPit(x, z) || !spotClear(x, z, h) ? findFree(x, z, h) : { x, z });
+  if (AT) {
+    const f = SPOT ? AT : clear(AT.x, AT.z, AT.h);   // ?spot= wins over ?at=
+    if (f.x !== AT.x || f.z !== AT.z) { vehicle.reset(f.x, f.z, AT.h); camReset(); }
+    const u = new URL(location.href); u.searchParams.delete('at'); history.replaceState(null, '', u.href);   // reload = normal spawn
+  }
+  const post = () => {
+    if (leaving) return;   // newGame(): nothing re-saves a position during its reload
+    const p = vehicle.getPosition(), ll = geoFrame.toLatLon(p.x, p.y);
+    const m = { type: 'pos', level: LEVEL, x: p.x, z: p.y, heading: vehicle.getHeading(), speed: vehicle.speedKmh, lat: ll.lat, lon: ll.lon, t: Date.now() };
+    if (bc) bc.postMessage(m); else try { localStorage.setItem('berlinDrive.pos', JSON.stringify(m)); } catch { /* no storage */ }
+  };
+  const onCmd = (m) => {
+    if (!m || m.level == null) return;
+    if (m.type === 'teleport' && m.level === LEVEL) {
+      const f = clear(m.x, m.z, m.heading); window.berlinDrive.teleport(f.x, f.z, m.heading); post();
+    }
+  };
+  if (bc) bc.onmessage = (e) => onCmd(e.data);
+  addEventListener('storage', (e) => { if (e.key === 'berlinDrive.cmd') try { onCmd(JSON.parse(e.newValue)); } catch { /* bad json */ } });
+  setInterval(post, 250);
+}
+
+// ---------- Neustart: a real fresh start (berlinDrive.newGame(); the menu asks first) ----------
+// Progress keys are cleared, settings kept, then the page reloads without ?spot= / ?at= (the
+// mood stays in the URL: a setting). On the reload everything in memory starts fresh too:
+// balloon start rule and cycle, football score, street-plate history, skid marks, roof /
+// S-Bahn / tunnel modes. Nothing writes a position on the way out (`leaving`).
+// Progress (reset): localStorage berlinDrive.eggs.found, berlinDrive.balloon.cut, berlinDrive.pos;
+// sessionStorage berlinDrive.resume. Everything else under berlinDrive.* is a setting (kept).
+const PROGRESS_KEYS = ['berlinDrive.eggs.found', 'berlinDrive.balloon.cut', 'berlinDrive.pos'];
+let leaving = false;
+function newGame() {
+  leaving = true;
+  for (const k of PROGRESS_KEYS) try { localStorage.removeItem(k); } catch { /* no storage */ }
+  try { sessionStorage.removeItem('berlinDrive.resume'); } catch { /* no storage */ }
+  const u = new URL(location.href);
+  for (const k of ['spot', 'at', 'level']) u.searchParams.delete(k);
+  location.replace(u.href);
+  return true;
+}
+// ---------- Auf Standard zurücksetzen (Einstellungen; berlinDrive.resetSettings()) ----------
+// The opposite of newGame(): every SETTING back to its default, PROGRESS untouched. Done by
+// removing the setting keys and reloading through the mood-switch path (sessionStorage
+// berlinDrive.resume keeps the car where it is, as the default car), with ?mood= and the
+// setting overrides ?maxspeed= ?height= ?distance= ?camcollide= dropped. So every default comes
+// from the code that applies it when no key is stored (no second copy here). After the reload
+// the menu reopens on Einstellungen (sessionStorage berlinDrive.reopen).
+function resetSettings() {
+  leaving = true;
+  const keep = new Set([...PROGRESS_KEYS, 'berlinDrive.cmd']);
+  try {
+    const ks = [];
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith('berlinDrive.') && !keep.has(k)) ks.push(k); }
+    for (const k of ks) localStorage.removeItem(k);
+  } catch { /* no storage: nothing saved anyway */ }
+  const p = vehicle.getPosition(), u = new URL(location.href);
+  for (const k of ['mood', 'maxspeed', 'height', 'distance', 'camcollide']) u.searchParams.delete(k);
+  try {
+    sessionStorage.setItem('berlinDrive.resume', JSON.stringify(
+      { level: LEVEL, kind: 'car', x: p.x, z: p.y, h: vehicle.getHeading(), sbahn: !!sbahn?.active, tunnel: !!tunnels?.active, roof: !!roofs?.active }));
+    sessionStorage.setItem('berlinDrive.reopen', 'settings');
+  } catch { /* no storage */ }
+  location.replace(u.href);
+  return true;
+}
+// ---------- Esc menu (js/menu.js): Weiter, Karte, Einstellungen, Steuerung, Info, Neustart + the bear count ----------
+// Settings rows call the old controls' functions (same storage keys; Obstacles still start off on every load).
+{
+  const MOOD_TXT = { '': 'Aus', day: 'Tag', moon: 'Mond', snow: 'Schnee' };
+  const PAINT_TXT = { red: 'Rot', blue: 'Blau', yellow: 'Gelb', green: 'Grün', orange: 'Orange', purple: 'Lila' };
+  const DETAIL_TXT = { phone: 'Handy', low: 'Niedrig', normal: 'Normal', high: 'Hoch' };
+  const redraw = () => { pausedRedraw = true; };   // the frozen picture shows a new paint / vehicle at once
+  const settings = () => {
+    const speeds = [...new Set([...SPEED_CHOICES, speedLimitKmh])];   // e.g. ?maxspeed=40 adds its value
+    const rows = [
+      { label: 'Stimmung', choices: MOODS.map((m) => [m, MOOD_TXT[m] ?? m]), get: () => moodNow, set: (v) => setMood(v),
+        note: 'Ein Wechsel lädt die Seite neu; das Auto bleibt, wo es ist.' },
+      { label: 'Fahrzeug', choices: VEHICLE_CHOICES.map((c) => [c, c === 'bus' ? 'Bus' : PAINT_TXT[c.slice(4)] || c.slice(4)]),
+        get: () => (vehicle.specName === 'bus' ? 'bus' : 'car:' + carPaint), set: (v) => { setVehicle(v); redraw(); } },
+      { label: 'Blinker', choices: [[true, 'An'], [false, 'Aus']],   // berlinDrive.setBlinkers / .blinkers (car visuals; saved as berlinDrive.blinkers, default on)
+        get: () => window.berlinDrive?.blinkers ?? true, set: (v) => { window.berlinDrive?.setBlinkers?.(v); redraw(); } },
+      { label: 'Tempo (km/h)', choices: speeds.map((v) => [v, v ? String(v) : 'frei']), get: () => speedLimitKmh, set: (v) => setSpeedLimit(v) },
+      { label: 'Hindernisse', choices: [[false, 'Aus'], [true, 'An']], get: () => collision, set: (v) => setCollision(v),
+        disabled: !hasColliders, note: hasColliders ? 'Bäume und Straßenhindernisse; Häuser bremsen immer.' : 'Auf diesem Level gibt es keine Straßenhindernisse.' },
+    ];
+    if (setDetail) rows.push({ label: 'Detail', choices: detailChoices.map((k) => [k, DETAIL_TXT[k] || k]), get: detailNow, set: (v) => setDetail(v),
+                               note: 'Niedrig für ältere oder integrierte Grafikchips.' });
+    rows.push({ label: 'Kamera', node: $('camui'), home: $('toprow') });
+    rows.push({ action: 'Auf Standard zurücksetzen', run: resetSettings });   // quiet text button at the bottom
+    return rows;
+  };
+  menu = createMenu({
+    base,
+    bears: () => (eggs && eggs.count ? { count: eggs.count } : null),   // only "7 / 18" (owner): no list, names or hints in the menu
+    openMap: () => (minimap ? minimap.setOverview(true) : menu.mapClosed()),
+    restart: () => restart(),   // "Zum Start" (= key R): the car back at the start, progress kept
+    newGame: () => newGame(),   // "Neustart": all progress back to zero (confirmed in the menu)
+    settings,
+    onPause: (on) => setPause('menu', on),
+    slowMo,   // Esc: slow motion into the pause, short ease out (MENU_FX in js/menu.js)
+    isBlocked: () => loading.open,
+    isOverview: () => !!minimap?.overview,
+  });
+}
+</script>
+</body>
+</html>
