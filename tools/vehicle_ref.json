@@ -1,0 +1,2679 @@
+{
+ "model": "js/vehicle.js",
+ "step": 0.016666666666666666,
+ "settings": {
+  "handling": "arcade",
+  "power": 1,
+  "speedLimitKmh": 50,
+  "reverseLimitKmh": 50,
+  "maxSpeedKmh": 160
+ },
+ "tolerances": {
+  "speed": {
+   "rel": 0.05,
+   "abs": 0.5,
+   "unit": "km/h"
+  },
+  "time": {
+   "rel": 0.05,
+   "abs": 0.05,
+   "unit": "s"
+  },
+  "dist": {
+   "rel": 0.05,
+   "abs": 0.1,
+   "unit": "m"
+  },
+  "radius": {
+   "rel": 0.05,
+   "abs": 0.2,
+   "unit": "m"
+  },
+  "angle": {
+   "rel": 0.05,
+   "abs": 1,
+   "unit": "deg"
+  },
+  "rate": {
+   "rel": 0.05,
+   "abs": 1,
+   "unit": "deg/s"
+  },
+  "slip": {
+   "rel": 0.1,
+   "abs": 0.5,
+   "unit": "deg"
+  },
+  "wallspeed": {
+   "rel": 0.1,
+   "abs": 0.5,
+   "unit": "km/h"
+  },
+  "walldist": {
+   "rel": 0.1,
+   "abs": 0.1,
+   "unit": "m"
+  },
+  "wallangle": {
+   "rel": 0.1,
+   "abs": 1,
+   "unit": "deg"
+  },
+  "zero": {
+   "rel": 0,
+   "abs": 0.02,
+   "unit": ""
+  },
+  "dim": {
+   "rel": 0.01,
+   "abs": 0.01,
+   "unit": ""
+  },
+  "bool": {
+   "rel": 0,
+   "abs": 0,
+   "unit": ""
+  },
+  "info": {
+   "rel": null,
+   "abs": null,
+   "unit": ""
+  }
+ },
+ "values": {
+  "car.dim.outline_is_polygon": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "first fixture of vehicle.body: polygon (balloon cable, spot overlap tests read it)"
+  },
+  "car.dim.outline_vertices": {
+   "v": 10,
+   "cls": "info",
+   "unit": ""
+  },
+  "car.dim.outline_width": {
+   "v": 1.67,
+   "cls": "dim",
+   "unit": "",
+   "note": "m, body-local x"
+  },
+  "car.dim.outline_length": {
+   "v": 4.3,
+   "cls": "dim",
+   "unit": "",
+   "note": "m, body-local y"
+  },
+  "car.dim.outline_front": {
+   "v": 2.149,
+   "cls": "dim",
+   "unit": "",
+   "note": "m from the body origin to the nose (forward = local -y)"
+  },
+  "car.dim.outline_rear": {
+   "v": 2.151,
+   "cls": "dim",
+   "unit": "",
+   "note": "m from the body origin to the tail"
+  },
+  "car.dim.spec_bodyWidth": {
+   "v": 1.81,
+   "cls": "dim",
+   "unit": ""
+  },
+  "car.dim.spec_bodyLength": {
+   "v": 4.495,
+   "cls": "dim",
+   "unit": ""
+  },
+  "car.dim.spec_wheelBase": {
+   "v": 2.65,
+   "cls": "dim",
+   "unit": ""
+  },
+  "car.dim.spec_tread": {
+   "v": 1.35,
+   "cls": "dim",
+   "unit": ""
+  },
+  "car.dim.spec_wheelRadius": {
+   "v": 0.311,
+   "cls": "dim",
+   "unit": ""
+  },
+  "car.dim.spec_mass": {
+   "v": 1500,
+   "cls": "dim",
+   "unit": "",
+   "note": "kg"
+  },
+  "car.dim.mass": {
+   "v": 1500,
+   "cls": "dim",
+   "unit": "",
+   "note": "kg, getMass() = main body mass"
+  },
+  "car.dim.body_mass": {
+   "v": 1500,
+   "cls": "dim",
+   "unit": "",
+   "note": "kg"
+  },
+  "car.dim.body_inertia": {
+   "v": 1500,
+   "cls": "info",
+   "unit": "",
+   "note": "kg m2 about the body origin"
+  },
+  "car.dim.full_brake_decel_expected": {
+   "v": 8.533,
+   "cls": "info",
+   "unit": "",
+   "note": "m/s2: dust.js treats 4 x spec.brakeForce / spec.mass as full braking"
+  },
+  "car.dim.wheel_count": {
+   "v": 4,
+   "cls": "dim",
+   "unit": ""
+  },
+  "car.dim.wheel0_x": {
+   "v": -0.675,
+   "cls": "dim",
+   "unit": "",
+   "note": "m, body-local (wheels: 0 FL, 1 FR, 2 RL, 3 RR)"
+  },
+  "car.dim.wheel0_y": {
+   "v": -1.25,
+   "cls": "dim",
+   "unit": ""
+  },
+  "car.dim.wheel1_x": {
+   "v": 0.675,
+   "cls": "dim",
+   "unit": "",
+   "note": "m, body-local (wheels: 0 FL, 1 FR, 2 RL, 3 RR)"
+  },
+  "car.dim.wheel1_y": {
+   "v": -1.25,
+   "cls": "dim",
+   "unit": ""
+  },
+  "car.dim.wheel2_x": {
+   "v": -0.675,
+   "cls": "dim",
+   "unit": "",
+   "note": "m, body-local (wheels: 0 FL, 1 FR, 2 RL, 3 RR)"
+  },
+  "car.dim.wheel2_y": {
+   "v": 1.4,
+   "cls": "dim",
+   "unit": ""
+  },
+  "car.dim.wheel3_x": {
+   "v": 0.675,
+   "cls": "dim",
+   "unit": "",
+   "note": "m, body-local (wheels: 0 FL, 1 FR, 2 RL, 3 RR)"
+  },
+  "car.dim.wheel3_y": {
+   "v": 1.4,
+   "cls": "dim",
+   "unit": ""
+  },
+  "car.dim.com_offset": {
+   "v": 0,
+   "cls": "dim",
+   "unit": "",
+   "note": "m, body centre of mass from origin"
+  },
+  "car.dim.filter_categories": {
+   "v": 3,
+   "cls": "info",
+   "unit": "",
+   "note": "OR of categoryBits over all own fixtures"
+  },
+  "car.dim.filter_masks_all_ffff": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "every own fixture collides with categories 0x0001..0x4000"
+  },
+  "car.dim.sensor_default": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "no own fixture is a sensor on the ground"
+  },
+  "car.vis.frontL_at_rest": {
+   "v": 30.878,
+   "cls": "info",
+   "unit": "",
+   "note": "deg drawn front-left wheel angle, full lock right at rest (+ = right)"
+  },
+  "car.vis.frontR_at_rest": {
+   "v": 40.694,
+   "cls": "info",
+   "unit": ""
+  },
+  "car.vis.frontL_at50": {
+   "v": 28.394,
+   "cls": "info",
+   "unit": "",
+   "note": "deg, full lock right held at 50 km/h"
+  },
+  "car.vis.frontR_at50": {
+   "v": 36.722,
+   "cls": "info",
+   "unit": ""
+  },
+  "car.vis.squeal_peak_at50": {
+   "v": 0.5,
+   "cls": "info",
+   "unit": "",
+   "note": "squealLevel 0..1, full lock at 50"
+  },
+  "car.vis.right_lever_yaw_positive": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "lever +1 (ArrowRight) turns right: heading grows"
+  },
+  "car.vis.attitude_echo": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "tilt / roll read back what setAttitude got"
+  },
+  "car.vis.speedKmh_matches": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "vehicle.speedKmh within 0.5 km/h of the body speed while driving"
+  },
+  "car.pull.limit50.t_to_10": {
+   "v": 1,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.pull.limit50.d_to_10": {
+   "v": 1.423,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "car.pull.limit50.t_to_20": {
+   "v": 2,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.pull.limit50.d_to_20": {
+   "v": 5.64,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "car.pull.limit50.t_to_30": {
+   "v": 2.983,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.pull.limit50.d_to_30": {
+   "v": 12.514,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "car.pull.limit50.t_to_40": {
+   "v": 3.983,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.pull.limit50.d_to_40": {
+   "v": 22.278,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "car.pull.limit50.t_to_49": {
+   "v": 6.267,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.pull.limit50.d_to_49": {
+   "v": 51.559,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "car.pull.limit50.t_to_50": {
+   "v": null,
+   "cls": "time",
+   "unit": "s",
+   "note": "limit approached from below; null = never quite 50"
+  },
+  "car.pull.limit50.d_to_50": {
+   "v": null,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "car.pull.limit50.v_at_1s": {
+   "v": 10.074,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.pull.limit50.v_at_2s": {
+   "v": 20.136,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.pull.limit50.v_at_3s": {
+   "v": 30.2,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.pull.limit50.v_at_5s": {
+   "v": 46.45,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.pull.limit50.v_at_8s": {
+   "v": 49.828,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.pull.limit50.top_speed": {
+   "v": 50,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "after 25 s full throttle"
+  },
+  "car.pull.free.t_to_10": {
+   "v": 0.6,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.pull.free.d_to_10": {
+   "v": 0.875,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "car.pull.free.t_to_20": {
+   "v": 1.2,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.pull.free.d_to_20": {
+   "v": 3.427,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "car.pull.free.t_to_30": {
+   "v": 1.8,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.pull.free.d_to_30": {
+   "v": 7.651,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "car.pull.free.t_to_40": {
+   "v": 2.4,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.pull.free.d_to_40": {
+   "v": 13.544,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "car.pull.free.t_to_49": {
+   "v": 2.933,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.pull.free.d_to_49": {
+   "v": 20.175,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "car.pull.free.t_to_50": {
+   "v": 3,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.pull.free.d_to_50": {
+   "v": 21.096,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "car.pull.free.t_to_100": {
+   "v": 6.1,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.pull.free.d_to_100": {
+   "v": 86.088,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "car.pull.free.v_at_1s": {
+   "v": 16.848,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.pull.free.v_at_2s": {
+   "v": 33.551,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.pull.free.v_at_3s": {
+   "v": 50.141,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.pull.free.v_at_5s": {
+   "v": 82.684,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.pull.free.v_at_8s": {
+   "v": 129.074,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.pull.free.top_speed": {
+   "v": 160.23,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "after 90 s full throttle"
+  },
+  "car.brake.from50.entry_speed": {
+   "v": 50,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.brake.from50.t_stop": {
+   "v": 1.5,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.brake.from50.d_stop": {
+   "v": 10.325,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "car.brake.from50.t_reverse_starts": {
+   "v": 1.95,
+   "cls": "time",
+   "unit": "s",
+   "note": "brake still held after the stop: reverse engages"
+  },
+  "car.brake.from30.entry_speed": {
+   "v": 29.996,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.brake.from30.t_stop": {
+   "v": 0.9,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.brake.from30.d_stop": {
+   "v": 3.701,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "car.brake.from30.t_reverse_starts": {
+   "v": 1.35,
+   "cls": "time",
+   "unit": "s",
+   "note": "brake still held after the stop: reverse engages"
+  },
+  "car.coast.from50.entry_speed": {
+   "v": 50,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.coast.from50.t_stop": {
+   "v": 2.783,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.coast.from50.d_stop": {
+   "v": 19.282,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "car.coast.from30.entry_speed": {
+   "v": 29.996,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.coast.from30.t_stop": {
+   "v": 1.667,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.coast.from30.d_stop": {
+   "v": 6.951,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "car.reverse.limit50.t_to_1": {
+   "v": 0.517,
+   "cls": "time",
+   "unit": "s",
+   "note": "brake held from standstill until rolling backwards at 1 km/h"
+  },
+  "car.reverse.limit50.t_to_10": {
+   "v": 1.417,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.reverse.limit50.t_to_20": {
+   "v": 2.417,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.reverse.limit50.t_to_30": {
+   "v": 3.4,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.reverse.limit50.t_to_40": {
+   "v": 4.4,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.reverse.limit50.v_at_1s": {
+   "v": 5.875,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.reverse.limit50.v_at_2s": {
+   "v": 15.942,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.reverse.limit50.v_at_3s": {
+   "v": 26.012,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.reverse.limit50.v_at_5s": {
+   "v": 44.603,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.reverse.limit50.top_speed": {
+   "v": 50,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "backwards, after 25 s"
+  },
+  "car.reverse.limit50.heading_change": {
+   "v": 6.414,
+   "cls": "info",
+   "unit": "",
+   "note": "deg drift while reversing straight (small is fine)"
+  },
+  "car.reverse.limit50.d_back": {
+   "v": 305.692,
+   "cls": "dist",
+   "unit": "m",
+   "note": "sanity: travels backwards"
+  },
+  "car.reverse.gear_sign": {
+   "v": -1,
+   "cls": "bool",
+   "unit": "",
+   "note": "vehicle.gear while reversing (dust reads its sign)"
+  },
+  "car.reverse.free.t_to_1": {
+   "v": 0.483,
+   "cls": "time",
+   "unit": "s",
+   "note": "brake held from standstill until rolling backwards at 1 km/h"
+  },
+  "car.reverse.free.t_to_10": {
+   "v": 1.017,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.reverse.free.t_to_20": {
+   "v": 1.617,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.reverse.free.t_to_30": {
+   "v": 2.217,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.reverse.free.t_to_40": {
+   "v": 2.817,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.reverse.free.v_at_1s": {
+   "v": 9.867,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.reverse.free.v_at_2s": {
+   "v": 26.608,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.reverse.free.v_at_3s": {
+   "v": 43.258,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.reverse.free.v_at_5s": {
+   "v": 76.001,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.reverse.free.top_speed": {
+   "v": 160.23,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "backwards, after 40 s"
+  },
+  "car.reverse.free.heading_change": {
+   "v": 3.054,
+   "cls": "info",
+   "unit": "",
+   "note": "deg drift while reversing straight (small is fine)"
+  },
+  "car.reverse.free.d_back": {
+   "v": 1543.225,
+   "cls": "dist",
+   "unit": "m",
+   "note": "sanity: travels backwards"
+  },
+  "car.reverse.r2f.entry_speed": {
+   "v": 20.001,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.reverse.r2f.t_stop": {
+   "v": 0.6,
+   "cls": "time",
+   "unit": "s",
+   "note": "reversing at 20, throttle pressed: back to standstill"
+  },
+  "car.reverse.r2f.t_forward_1kmh": {
+   "v": 1.1,
+   "cls": "time",
+   "unit": "s",
+   "note": "then rolling forwards at 1 km/h"
+  },
+  "car.turn.at10.speed_held": {
+   "v": 10.621,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "full lock right, throttle, Speed limit 10"
+  },
+  "car.turn.at10.yaw_rate": {
+   "v": 43.193,
+   "cls": "rate",
+   "unit": "deg/s"
+  },
+  "car.turn.at10.radius": {
+   "v": 3.914,
+   "cls": "radius",
+   "unit": "m",
+   "note": "path radius of the centre = speed / yaw rate"
+  },
+  "car.turn.at10.slip": {
+   "v": 18.762,
+   "cls": "slip",
+   "unit": "deg",
+   "note": "angle between heading and velocity"
+  },
+  "car.turn.at20.speed_held": {
+   "v": 21.195,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "full lock right, throttle, Speed limit 20"
+  },
+  "car.turn.at20.yaw_rate": {
+   "v": 84.001,
+   "cls": "rate",
+   "unit": "deg/s"
+  },
+  "car.turn.at20.radius": {
+   "v": 4.016,
+   "cls": "radius",
+   "unit": "m",
+   "note": "path radius of the centre = speed / yaw rate"
+  },
+  "car.turn.at20.slip": {
+   "v": 19.178,
+   "cls": "slip",
+   "unit": "deg",
+   "note": "angle between heading and velocity"
+  },
+  "car.turn.at30.speed_held": {
+   "v": 30.3,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "full lock right, throttle, Speed limit 30"
+  },
+  "car.turn.at30.yaw_rate": {
+   "v": 113.016,
+   "cls": "rate",
+   "unit": "deg/s"
+  },
+  "car.turn.at30.radius": {
+   "v": 4.267,
+   "cls": "radius",
+   "unit": "m",
+   "note": "path radius of the centre = speed / yaw rate"
+  },
+  "car.turn.at30.slip": {
+   "v": 17.073,
+   "cls": "slip",
+   "unit": "deg",
+   "note": "angle between heading and velocity"
+  },
+  "car.turn.at40.speed_held": {
+   "v": 35.652,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "full lock right, throttle, Speed limit 40"
+  },
+  "car.turn.at40.yaw_rate": {
+   "v": 120.31,
+   "cls": "rate",
+   "unit": "deg/s"
+  },
+  "car.turn.at40.radius": {
+   "v": 4.716,
+   "cls": "radius",
+   "unit": "m",
+   "note": "path radius of the centre = speed / yaw rate"
+  },
+  "car.turn.at40.slip": {
+   "v": 13.092,
+   "cls": "slip",
+   "unit": "deg",
+   "note": "angle between heading and velocity"
+  },
+  "car.turn.at50.speed_held": {
+   "v": 41.222,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "full lock right, throttle, Speed limit 50"
+  },
+  "car.turn.at50.yaw_rate": {
+   "v": 102.385,
+   "cls": "rate",
+   "unit": "deg/s"
+  },
+  "car.turn.at50.radius": {
+   "v": 6.408,
+   "cls": "radius",
+   "unit": "m",
+   "note": "path radius of the centre = speed / yaw rate"
+  },
+  "car.turn.at50.slip": {
+   "v": 9.12,
+   "cls": "slip",
+   "unit": "deg",
+   "note": "angle between heading and velocity"
+  },
+  "car.steer.at30.heading_0.25s": {
+   "v": 10.556,
+   "cls": "angle",
+   "unit": "deg",
+   "note": "full lock right as a step, throttle held"
+  },
+  "car.steer.at30.heading_0.5s": {
+   "v": 35.642,
+   "cls": "angle",
+   "unit": "deg",
+   "note": "full lock right as a step, throttle held"
+  },
+  "car.steer.at30.heading_1s": {
+   "v": 90.657,
+   "cls": "angle",
+   "unit": "deg",
+   "note": "full lock right as a step, throttle held"
+  },
+  "car.steer.at30.heading_2s": {
+   "v": 202.637,
+   "cls": "angle",
+   "unit": "deg",
+   "note": "full lock right as a step, throttle held"
+  },
+  "car.steer.at30.yaw_rate_2s": {
+   "v": 112.569,
+   "cls": "rate",
+   "unit": "deg/s"
+  },
+  "car.steer.at30.release_t_settle": {
+   "v": 0.333,
+   "cls": "time",
+   "unit": "s",
+   "note": "steering released: until |yaw rate| < 2 deg/s"
+  },
+  "car.steer.at30.release_drift": {
+   "v": 11.134,
+   "cls": "angle",
+   "unit": "deg",
+   "note": "heading change from release to settle"
+  },
+  "car.steer.at30.release_speed_6s": {
+   "v": 29.998,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.steer.at50.heading_0.25s": {
+   "v": 10.428,
+   "cls": "angle",
+   "unit": "deg",
+   "note": "full lock right as a step, throttle held"
+  },
+  "car.steer.at50.heading_0.5s": {
+   "v": 28.966,
+   "cls": "angle",
+   "unit": "deg",
+   "note": "full lock right as a step, throttle held"
+  },
+  "car.steer.at50.heading_1s": {
+   "v": 71.903,
+   "cls": "angle",
+   "unit": "deg",
+   "note": "full lock right as a step, throttle held"
+  },
+  "car.steer.at50.heading_2s": {
+   "v": 169.252,
+   "cls": "angle",
+   "unit": "deg",
+   "note": "full lock right as a step, throttle held"
+  },
+  "car.steer.at50.yaw_rate_2s": {
+   "v": 100.73,
+   "cls": "rate",
+   "unit": "deg/s"
+  },
+  "car.steer.at50.release_t_settle": {
+   "v": 0.4,
+   "cls": "time",
+   "unit": "s",
+   "note": "steering released: until |yaw rate| < 2 deg/s"
+  },
+  "car.steer.at50.release_drift": {
+   "v": 12.853,
+   "cls": "angle",
+   "unit": "deg",
+   "note": "heading change from release to settle"
+  },
+  "car.steer.at50.release_speed_6s": {
+   "v": 49.98,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.slalom.peak_lateral": {
+   "v": 64.395,
+   "cls": "dist",
+   "unit": "m",
+   "note": "40 km/h, full lock R/L alternating every 1 s for 8 s, throttle held"
+  },
+  "car.slalom.peak_yaw_rate": {
+   "v": 117.322,
+   "cls": "rate",
+   "unit": "deg/s"
+  },
+  "car.slalom.final_speed": {
+   "v": 35.437,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.slalom.final_heading": {
+   "v": 46.773,
+   "cls": "angle",
+   "unit": "deg"
+  },
+  "car.stand.steer_drift": {
+   "v": 0,
+   "cls": "zero",
+   "unit": "",
+   "note": "steering left/right at rest, no pedal"
+  },
+  "car.stand.steer_heading": {
+   "v": 0,
+   "cls": "zero",
+   "unit": ""
+  },
+  "car.stand.held": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "vehicle.held after standing still with no key"
+  },
+  "car.stand.tap_distance": {
+   "v": 0.198,
+   "cls": "dist",
+   "unit": "m",
+   "note": "throttle tapped 0.3 s from rest, then released"
+  },
+  "car.stand.tap_peak_speed": {
+   "v": 3.023,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.stand.tap_t_to_rest": {
+   "v": 0.5,
+   "cls": "time",
+   "unit": "s",
+   "note": "after release until speed is exactly 0"
+  },
+  "car.stand.downhill5_drift": {
+   "v": 0,
+   "cls": "zero",
+   "unit": "",
+   "note": "parked on a 5 deg downhill, no key, 5 s"
+  },
+  "car.wall.head.speed_before": {
+   "v": 29.995,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "30 km/h with throttle into a wall, keys released at the hit"
+  },
+  "car.wall.head.fwd_speed_0.1s": {
+   "v": 0.053,
+   "cls": "wallspeed",
+   "unit": "km/h",
+   "note": "km/h along the heading (< 0 = moving back)"
+  },
+  "car.wall.head.fwd_speed_0.5s": {
+   "v": 0,
+   "cls": "wallspeed",
+   "unit": "km/h",
+   "note": "km/h"
+  },
+  "car.wall.head.rebound_dist": {
+   "v": 0,
+   "cls": "walldist",
+   "unit": "m",
+   "note": "m moved back from the position at the hit, max over 2 s"
+  },
+  "car.wall.head.heading_change": {
+   "v": 0.279,
+   "cls": "wallangle",
+   "unit": "deg",
+   "note": "deg after 2 s"
+  },
+  "car.wall.head.contact_reported": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "vehicle.wallContact set at the hit"
+  },
+  "car.wall.head.contact_impact": {
+   "v": 8.29,
+   "cls": "info",
+   "unit": "",
+   "note": "wallContact.impact (m/s into the wall before the step)"
+  },
+  "car.wall.head.contact_normal_y": {
+   "v": 1,
+   "cls": "info",
+   "unit": "",
+   "note": "wallContact normal, wall -> car (car came from +y)"
+  },
+  "car.wall.head.nose_dip_min": {
+   "v": -1.658,
+   "cls": "info",
+   "unit": "",
+   "note": "vehicle.impactPitch min (deg, < 0 = nose down)"
+  },
+  "car.wall.head.nose_dip_max": {
+   "v": 0,
+   "cls": "info",
+   "unit": ""
+  },
+  "car.wall.press.heading_change": {
+   "v": 2.503,
+   "cls": "info",
+   "unit": "",
+   "note": "throttle held 3 s against the wall"
+  },
+  "car.wall.press.moved": {
+   "v": 0.106,
+   "cls": "walldist",
+   "unit": "m",
+   "note": "m"
+  },
+  "car.wall.press.speed": {
+   "v": 0.068,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.wall.glance.speed_before": {
+   "v": 29.995,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "30 km/h, wall 30 deg off the heading, throttle held"
+  },
+  "car.wall.glance.speed_0.5s": {
+   "v": 8.814,
+   "cls": "wallspeed",
+   "unit": "km/h",
+   "note": "km/h"
+  },
+  "car.wall.glance.speed_1s": {
+   "v": 2.563,
+   "cls": "wallspeed",
+   "unit": "km/h",
+   "note": "km/h"
+  },
+  "car.wall.glance.heading_0.5s": {
+   "v": 17.953,
+   "cls": "wallangle",
+   "unit": "deg",
+   "note": "deg turned (+ = right, toward the wall direction)"
+  },
+  "car.wall.glance.heading_2s": {
+   "v": 26.046,
+   "cls": "wallangle",
+   "unit": "deg",
+   "note": "deg turned after 2 s (30 = parallel to the wall)"
+  },
+  "car.wall.glance.along_2s": {
+   "v": 3.096,
+   "cls": "walldist",
+   "unit": "m",
+   "note": "m travelled along the wall in 2 s"
+  },
+  "car.wall.glance.centre_to_wall_2s": {
+   "v": 1.392,
+   "cls": "walldist",
+   "unit": "m",
+   "note": "m from the car centre to the wall line after 2 s"
+  },
+  "car.sp.teleport.pos_error": {
+   "v": 0,
+   "cls": "zero",
+   "unit": "",
+   "note": "getPosition() right after reset(100, 50, 90 deg)"
+  },
+  "car.sp.teleport.heading_error": {
+   "v": 0,
+   "cls": "zero",
+   "unit": ""
+  },
+  "car.sp.teleport.speed_after": {
+   "v": 0,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "reset() at 50 km/h: velocity cleared"
+  },
+  "car.sp.teleport.drift_2s": {
+   "v": 0,
+   "cls": "zero",
+   "unit": "",
+   "note": "no key for 2 s after the reset"
+  },
+  "car.sp.teleport.throttle_2s": {
+   "v": 20.123,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "throttle after a reset: drives off normally"
+  },
+  "car.sp.swap.body_count_kept": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "destroy() removes every body it created"
+  },
+  "car.sp.swap.speed_1step": {
+   "v": 49.997,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "swapped to bus at 50 km/h, throttle held"
+  },
+  "car.sp.swap.speed_1s": {
+   "v": 49.999,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.sp.rollon_sbahn.speed_1step": {
+   "v": 29.702,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "reset + 30 km/h set on all bodies, no key"
+  },
+  "car.sp.rollon_sbahn.t_to_rest": {
+   "v": 1.65,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.sp.rollon_sbahn.d_to_rest": {
+   "v": 6.951,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "car.sp.rollon_edge.speed_1step": {
+   "v": 10.504,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "reset + 10.8 km/h set on all bodies, no key"
+  },
+  "car.sp.rollon_edge.t_to_rest": {
+   "v": 0.583,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.sp.rollon_edge.d_to_rest": {
+   "v": 0.889,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "car.sp.air.speed_after_0.6s_brake": {
+   "v": 49.823,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "airborne at 49.997 km/h, brake + full lock held 0.6 s"
+  },
+  "car.sp.air.heading_change": {
+   "v": 0,
+   "cls": "angle",
+   "unit": "deg"
+  },
+  "car.sp.air.speed_after_landing_brake_0.5s": {
+   "v": 32.062,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "wheels down again, brake 0.5 s: brakes work"
+  },
+  "car.sp.air.passes_wall": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "airborne car passes through a wall"
+  },
+  "car.sp.air.push_dist_0.6s": {
+   "v": 2.099,
+   "cls": "dist",
+   "unit": "m",
+   "note": "3.5 m/s set on the main body only (jump push), airborne 0.6 s"
+  },
+  "car.sp.air.push_speed_0.6s": {
+   "v": 12.586,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.sp.air.spawned_airborne_speed": {
+   "v": 35.925,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "spawned airborne with 36 km/h, 0.5 s"
+  },
+  "car.sp.nohold.speed_after_2s": {
+   "v": 25.008,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "noHold, no key, from 30 km/h"
+  },
+  "car.sp.nohold.creep_dist_1s": {
+   "v": 0.034,
+   "cls": "dist",
+   "unit": "m",
+   "note": "noHold, 0.36 km/h creep, no key, 1 s (not held)"
+  },
+  "car.sp.mask_other_wall.passed": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "mask = tunnel bit: an ordinary wall is passed"
+  },
+  "car.sp.mask_own_wall.passed": {
+   "v": 0,
+   "cls": "bool",
+   "unit": "",
+   "note": "mask = tunnel bit: tunnel wall stops the car"
+  },
+  "car.sp.shift.speed_0.5s": {
+   "v": 29.995,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "all bodies moved 1 m sideways at 30 km/h"
+  },
+  "car.sp.shift.lateral_kept": {
+   "v": 1,
+   "cls": "dist",
+   "unit": "m",
+   "note": "m east of an unshifted twin after 0.5 s (1 = shift kept)"
+  },
+  "car.sp.slope_up5.speed_20s": {
+   "v": 50,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "5 deg nose-up tilt, throttle, limit 50"
+  },
+  "car.sp.slope_down5.speed_20s": {
+   "v": 50,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "-5 deg nose-up tilt, throttle, limit 50"
+  },
+  "car.sp.slope_up5.brake_at_rest_drift": {
+   "v": 0.21,
+   "cls": "info",
+   "unit": "",
+   "note": "brake held at rest uphill (reverse engages after a moment)"
+  },
+  "car.sp.limit_lowered.speed_1s": {
+   "v": 58.121,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "cruising at 70, Speed set to 30, throttle held"
+  },
+  "car.sp.limit_lowered.speed_2s": {
+   "v": 46.403,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "car.sp.limit_lowered.t_to_31": {
+   "v": 4.85,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.sp.limit_lowered.final": {
+   "v": 29.996,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "after 15 s"
+  },
+  "car.sp.both_pedals.from30_speed_2s": {
+   "v": -0.117,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "throttle + brake held together 2 s from 30 km/h (signed, forward +)"
+  },
+  "car.sp.both_pedals.from_rest_speed_2s": {
+   "v": 0.117,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "throttle + brake held together 2 s from rest"
+  },
+  "car.sp.bumpy.throttle_speed_20s": {
+   "v": 50,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "pitch +-1 deg at 2 Hz, throttle, limit 50"
+  },
+  "car.sp.bumpy.coast50_t_stop": {
+   "v": 2.6,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.sp.bumpy.coast50_d_stop": {
+   "v": 18.022,
+   "cls": "dist",
+   "unit": "m",
+   "note": "keys released at 50 on the bumpy road"
+  },
+  "car.sp.ice.t_to_30": {
+   "v": 7.05,
+   "cls": "time",
+   "unit": "s",
+   "note": "grip 0.25 / rear 0.175, full throttle"
+  },
+  "car.sp.ice.brake30_t_stop": {
+   "v": 4.2,
+   "cls": "time",
+   "unit": "s"
+  },
+  "car.sp.ice.brake30_d_stop": {
+   "v": 17.558,
+   "cls": "dist",
+   "unit": "m",
+   "note": "full braking from 30 on ice"
+  },
+  "car.sp.ball.car_moved": {
+   "v": 0.003,
+   "cls": "zero",
+   "unit": "",
+   "note": "parked vehicle hit by the ball: does not move"
+  },
+  "car.sp.ball.car_turned": {
+   "v": 0,
+   "cls": "zero",
+   "unit": ""
+  },
+  "car.sp.ball.ball_bounced_back": {
+   "v": 1,
+   "cls": "bool",
+   "unit": ""
+  },
+  "car.opt.power0.5.free_t_to_50": {
+   "v": 7.033,
+   "cls": "time",
+   "unit": "s",
+   "note": "?power=0.5, Speed free"
+  },
+  "car.opt.power0.5.limit50_t_to_40": {
+   "v": 5.6,
+   "cls": "time",
+   "unit": "s",
+   "note": "?power=0.5, Speed 50"
+  },
+  "car.opt.power2.free_t_to_50": {
+   "v": 1.4,
+   "cls": "time",
+   "unit": "s",
+   "note": "?power=2, Speed free"
+  },
+  "car.opt.power2.limit50_t_to_40": {
+   "v": 3.983,
+   "cls": "time",
+   "unit": "s",
+   "note": "?power=2, Speed 50"
+  },
+  "car.opt.unknown_handling_is_default": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "?handling=<unknown> drives exactly like the default"
+  },
+  "bus.dim.outline_is_polygon": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "first fixture of vehicle.body: polygon (balloon cable, spot overlap tests read it)"
+  },
+  "bus.dim.outline_vertices": {
+   "v": 8,
+   "cls": "info",
+   "unit": ""
+  },
+  "bus.dim.outline_width": {
+   "v": 2.5,
+   "cls": "dim",
+   "unit": "",
+   "note": "m, body-local x"
+  },
+  "bus.dim.outline_length": {
+   "v": 12.7,
+   "cls": "dim",
+   "unit": "",
+   "note": "m, body-local y"
+  },
+  "bus.dim.outline_front": {
+   "v": 6.35,
+   "cls": "dim",
+   "unit": "",
+   "note": "m from the body origin to the nose (forward = local -y)"
+  },
+  "bus.dim.outline_rear": {
+   "v": 6.35,
+   "cls": "dim",
+   "unit": "",
+   "note": "m from the body origin to the tail"
+  },
+  "bus.dim.spec_bodyWidth": {
+   "v": 2.5,
+   "cls": "dim",
+   "unit": ""
+  },
+  "bus.dim.spec_bodyLength": {
+   "v": 12.7,
+   "cls": "dim",
+   "unit": ""
+  },
+  "bus.dim.spec_wheelBase": {
+   "v": 6,
+   "cls": "dim",
+   "unit": ""
+  },
+  "bus.dim.spec_tread": {
+   "v": 1.9,
+   "cls": "dim",
+   "unit": ""
+  },
+  "bus.dim.spec_wheelRadius": {
+   "v": 0.4,
+   "cls": "dim",
+   "unit": ""
+  },
+  "bus.dim.spec_mass": {
+   "v": 13000,
+   "cls": "dim",
+   "unit": "",
+   "note": "kg"
+  },
+  "bus.dim.mass": {
+   "v": 13000,
+   "cls": "dim",
+   "unit": "",
+   "note": "kg, getMass() = main body mass"
+  },
+  "bus.dim.body_mass": {
+   "v": 13000,
+   "cls": "dim",
+   "unit": "",
+   "note": "kg"
+  },
+  "bus.dim.body_inertia": {
+   "v": 30000,
+   "cls": "info",
+   "unit": "",
+   "note": "kg m2 about the body origin"
+  },
+  "bus.dim.full_brake_decel_expected": {
+   "v": 5.908,
+   "cls": "info",
+   "unit": "",
+   "note": "m/s2: dust.js treats 4 x spec.brakeForce / spec.mass as full braking"
+  },
+  "bus.dim.wheel_count": {
+   "v": 4,
+   "cls": "dim",
+   "unit": ""
+  },
+  "bus.dim.wheel0_x": {
+   "v": -0.95,
+   "cls": "dim",
+   "unit": "",
+   "note": "m, body-local (wheels: 0 FL, 1 FR, 2 RL, 3 RR)"
+  },
+  "bus.dim.wheel0_y": {
+   "v": -2.75,
+   "cls": "dim",
+   "unit": ""
+  },
+  "bus.dim.wheel1_x": {
+   "v": 0.95,
+   "cls": "dim",
+   "unit": "",
+   "note": "m, body-local (wheels: 0 FL, 1 FR, 2 RL, 3 RR)"
+  },
+  "bus.dim.wheel1_y": {
+   "v": -2.75,
+   "cls": "dim",
+   "unit": ""
+  },
+  "bus.dim.wheel2_x": {
+   "v": -0.95,
+   "cls": "dim",
+   "unit": "",
+   "note": "m, body-local (wheels: 0 FL, 1 FR, 2 RL, 3 RR)"
+  },
+  "bus.dim.wheel2_y": {
+   "v": 3.25,
+   "cls": "dim",
+   "unit": ""
+  },
+  "bus.dim.wheel3_x": {
+   "v": 0.95,
+   "cls": "dim",
+   "unit": "",
+   "note": "m, body-local (wheels: 0 FL, 1 FR, 2 RL, 3 RR)"
+  },
+  "bus.dim.wheel3_y": {
+   "v": 3.25,
+   "cls": "dim",
+   "unit": ""
+  },
+  "bus.dim.com_offset": {
+   "v": 0,
+   "cls": "dim",
+   "unit": "",
+   "note": "m, body centre of mass from origin"
+  },
+  "bus.dim.filter_categories": {
+   "v": 3,
+   "cls": "info",
+   "unit": "",
+   "note": "OR of categoryBits over all own fixtures"
+  },
+  "bus.dim.filter_masks_all_ffff": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "every own fixture collides with categories 0x0001..0x4000"
+  },
+  "bus.dim.sensor_default": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "no own fixture is a sensor on the ground"
+  },
+  "bus.vis.frontL_at_rest": {
+   "v": 40.804,
+   "cls": "info",
+   "unit": "",
+   "note": "deg drawn front-left wheel angle, full lock right at rest (+ = right)"
+  },
+  "bus.vis.frontR_at_rest": {
+   "v": 49.914,
+   "cls": "info",
+   "unit": ""
+  },
+  "bus.vis.frontL_at50": {
+   "v": 36.922,
+   "cls": "info",
+   "unit": "",
+   "note": "deg, full lock right held at 50 km/h"
+  },
+  "bus.vis.frontR_at50": {
+   "v": 44.597,
+   "cls": "info",
+   "unit": ""
+  },
+  "bus.vis.squeal_peak_at50": {
+   "v": 0.5,
+   "cls": "info",
+   "unit": "",
+   "note": "squealLevel 0..1, full lock at 50"
+  },
+  "bus.vis.right_lever_yaw_positive": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "lever +1 (ArrowRight) turns right: heading grows"
+  },
+  "bus.vis.attitude_echo": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "tilt / roll read back what setAttitude got"
+  },
+  "bus.vis.speedKmh_matches": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "vehicle.speedKmh within 0.5 km/h of the body speed while driving"
+  },
+  "bus.pull.limit50.t_to_10": {
+   "v": 1,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.pull.limit50.d_to_10": {
+   "v": 1.423,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "bus.pull.limit50.t_to_20": {
+   "v": 2,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.pull.limit50.d_to_20": {
+   "v": 5.646,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "bus.pull.limit50.t_to_30": {
+   "v": 2.983,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.pull.limit50.d_to_30": {
+   "v": 12.528,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "bus.pull.limit50.t_to_40": {
+   "v": 3.983,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.pull.limit50.d_to_40": {
+   "v": 22.303,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "bus.pull.limit50.t_to_49": {
+   "v": 6.267,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.pull.limit50.d_to_49": {
+   "v": 51.594,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "bus.pull.limit50.t_to_50": {
+   "v": null,
+   "cls": "time",
+   "unit": "s",
+   "note": "limit approached from below; null = never quite 50"
+  },
+  "bus.pull.limit50.d_to_50": {
+   "v": null,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "bus.pull.limit50.v_at_1s": {
+   "v": 10.079,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.pull.limit50.v_at_2s": {
+   "v": 20.157,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.pull.limit50.v_at_3s": {
+   "v": 30.236,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.pull.limit50.v_at_5s": {
+   "v": 46.465,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.pull.limit50.v_at_8s": {
+   "v": 49.828,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.pull.limit50.top_speed": {
+   "v": 50,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "after 25 s full throttle"
+  },
+  "bus.pull.free.t_to_10": {
+   "v": 0.917,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.pull.free.d_to_10": {
+   "v": 1.321,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "bus.pull.free.t_to_20": {
+   "v": 1.833,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.pull.free.d_to_20": {
+   "v": 5.183,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "bus.pull.free.t_to_30": {
+   "v": 2.75,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.pull.free.d_to_30": {
+   "v": 11.586,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "bus.pull.free.t_to_40": {
+   "v": 3.667,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.pull.free.d_to_40": {
+   "v": 20.529,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "bus.pull.free.t_to_49": {
+   "v": 4.5,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.pull.free.d_to_49": {
+   "v": 30.861,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "bus.pull.free.t_to_50": {
+   "v": 4.6,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.pull.free.d_to_50": {
+   "v": 32.241,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "bus.pull.free.t_to_100": {
+   "v": 9.217,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.pull.free.d_to_100": {
+   "v": 128.735,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "bus.pull.free.v_at_1s": {
+   "v": 10.996,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.pull.free.v_at_2s": {
+   "v": 21.883,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.pull.free.v_at_3s": {
+   "v": 32.765,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.pull.free.v_at_5s": {
+   "v": 54.496,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.pull.free.v_at_8s": {
+   "v": 86.967,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.pull.free.top_speed": {
+   "v": 160.176,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "after 90 s full throttle"
+  },
+  "bus.brake.from50.entry_speed": {
+   "v": 50,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.brake.from50.t_stop": {
+   "v": 2.1,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.brake.from50.d_stop": {
+   "v": 14.545,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "bus.brake.from50.t_reverse_starts": {
+   "v": 2.533,
+   "cls": "time",
+   "unit": "s",
+   "note": "brake still held after the stop: reverse engages"
+  },
+  "bus.brake.from30.entry_speed": {
+   "v": 30,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.brake.from30.t_stop": {
+   "v": 1.25,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.brake.from30.d_stop": {
+   "v": 5.211,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "bus.brake.from30.t_reverse_starts": {
+   "v": 1.7,
+   "cls": "time",
+   "unit": "s",
+   "note": "brake still held after the stop: reverse engages"
+  },
+  "bus.coast.from50.entry_speed": {
+   "v": 50,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.coast.from50.t_stop": {
+   "v": 3.817,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.coast.from50.d_stop": {
+   "v": 26.492,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "bus.coast.from30.entry_speed": {
+   "v": 30,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.coast.from30.t_stop": {
+   "v": 2.283,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.coast.from30.d_stop": {
+   "v": 9.518,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "bus.reverse.limit50.t_to_1": {
+   "v": 0.517,
+   "cls": "time",
+   "unit": "s",
+   "note": "brake held from standstill until rolling backwards at 1 km/h"
+  },
+  "bus.reverse.limit50.t_to_10": {
+   "v": 1.417,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.reverse.limit50.t_to_20": {
+   "v": 2.417,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.reverse.limit50.t_to_30": {
+   "v": 3.4,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.reverse.limit50.t_to_40": {
+   "v": 4.4,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.reverse.limit50.v_at_1s": {
+   "v": 5.88,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.reverse.limit50.v_at_2s": {
+   "v": 15.959,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.reverse.limit50.v_at_3s": {
+   "v": 26.039,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.reverse.limit50.v_at_5s": {
+   "v": 44.621,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.reverse.limit50.top_speed": {
+   "v": 50,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "backwards, after 25 s"
+  },
+  "bus.reverse.limit50.heading_change": {
+   "v": 1.427,
+   "cls": "info",
+   "unit": "",
+   "note": "deg drift while reversing straight (small is fine)"
+  },
+  "bus.reverse.limit50.d_back": {
+   "v": 305.726,
+   "cls": "dist",
+   "unit": "m",
+   "note": "sanity: travels backwards"
+  },
+  "bus.reverse.gear_sign": {
+   "v": -1,
+   "cls": "bool",
+   "unit": "",
+   "note": "vehicle.gear while reversing (dust reads its sign)"
+  },
+  "bus.reverse.free.t_to_1": {
+   "v": 0.5,
+   "cls": "time",
+   "unit": "s",
+   "note": "brake held from standstill until rolling backwards at 1 km/h"
+  },
+  "bus.reverse.free.t_to_10": {
+   "v": 1.333,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.reverse.free.t_to_20": {
+   "v": 2.25,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.reverse.free.t_to_30": {
+   "v": 3.167,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.reverse.free.t_to_40": {
+   "v": 4.083,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.reverse.free.v_at_1s": {
+   "v": 6.459,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.reverse.free.v_at_2s": {
+   "v": 17.349,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.reverse.free.v_at_3s": {
+   "v": 28.234,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.reverse.free.v_at_5s": {
+   "v": 49.976,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.reverse.free.top_speed": {
+   "v": 160.176,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "backwards, after 40 s"
+  },
+  "bus.reverse.free.heading_change": {
+   "v": 1.136,
+   "cls": "info",
+   "unit": "",
+   "note": "deg drift while reversing straight (small is fine)"
+  },
+  "bus.reverse.free.d_back": {
+   "v": 1433.09,
+   "cls": "dist",
+   "unit": "m",
+   "note": "sanity: travels backwards"
+  },
+  "bus.reverse.r2f.entry_speed": {
+   "v": 20,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.reverse.r2f.t_stop": {
+   "v": 0.833,
+   "cls": "time",
+   "unit": "s",
+   "note": "reversing at 20, throttle pressed: back to standstill"
+  },
+  "bus.reverse.r2f.t_forward_1kmh": {
+   "v": 1.317,
+   "cls": "time",
+   "unit": "s",
+   "note": "then rolling forwards at 1 km/h"
+  },
+  "bus.turn.at10.speed_held": {
+   "v": 10.479,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "full lock right, throttle, Speed limit 10"
+  },
+  "bus.turn.at10.yaw_rate": {
+   "v": 24.874,
+   "cls": "rate",
+   "unit": "deg/s"
+  },
+  "bus.turn.at10.radius": {
+   "v": 6.705,
+   "cls": "radius",
+   "unit": "m",
+   "note": "path radius of the centre = speed / yaw rate"
+  },
+  "bus.turn.at10.slip": {
+   "v": 26.723,
+   "cls": "slip",
+   "unit": "deg",
+   "note": "angle between heading and velocity"
+  },
+  "bus.turn.at20.speed_held": {
+   "v": 20.687,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "full lock right, throttle, Speed limit 20"
+  },
+  "bus.turn.at20.yaw_rate": {
+   "v": 45.393,
+   "cls": "rate",
+   "unit": "deg/s"
+  },
+  "bus.turn.at20.radius": {
+   "v": 7.253,
+   "cls": "radius",
+   "unit": "m",
+   "note": "path radius of the centre = speed / yaw rate"
+  },
+  "bus.turn.at20.slip": {
+   "v": 25.431,
+   "cls": "slip",
+   "unit": "deg",
+   "note": "angle between heading and velocity"
+  },
+  "bus.turn.at30.speed_held": {
+   "v": 26.305,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "full lock right, throttle, Speed limit 30"
+  },
+  "bus.turn.at30.yaw_rate": {
+   "v": 33.294,
+   "cls": "rate",
+   "unit": "deg/s"
+  },
+  "bus.turn.at30.radius": {
+   "v": 12.575,
+   "cls": "radius",
+   "unit": "m",
+   "note": "path radius of the centre = speed / yaw rate"
+  },
+  "bus.turn.at30.slip": {
+   "v": 13.806,
+   "cls": "slip",
+   "unit": "deg",
+   "note": "angle between heading and velocity"
+  },
+  "bus.turn.at40.speed_held": {
+   "v": 34.527,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "full lock right, throttle, Speed limit 40"
+  },
+  "bus.turn.at40.yaw_rate": {
+   "v": 24.54,
+   "cls": "rate",
+   "unit": "deg/s"
+  },
+  "bus.turn.at40.radius": {
+   "v": 22.393,
+   "cls": "radius",
+   "unit": "m",
+   "note": "path radius of the centre = speed / yaw rate"
+  },
+  "bus.turn.at40.slip": {
+   "v": 7.194,
+   "cls": "slip",
+   "unit": "deg",
+   "note": "angle between heading and velocity"
+  },
+  "bus.turn.at50.speed_held": {
+   "v": 43.894,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "full lock right, throttle, Speed limit 50"
+  },
+  "bus.turn.at50.yaw_rate": {
+   "v": 19.618,
+   "cls": "rate",
+   "unit": "deg/s"
+  },
+  "bus.turn.at50.radius": {
+   "v": 35.611,
+   "cls": "radius",
+   "unit": "m",
+   "note": "path radius of the centre = speed / yaw rate"
+  },
+  "bus.turn.at50.slip": {
+   "v": 4.057,
+   "cls": "slip",
+   "unit": "deg",
+   "note": "angle between heading and velocity"
+  },
+  "bus.steer.at30.heading_0.25s": {
+   "v": 2.534,
+   "cls": "angle",
+   "unit": "deg",
+   "note": "full lock right as a step, throttle held"
+  },
+  "bus.steer.at30.heading_0.5s": {
+   "v": 7.978,
+   "cls": "angle",
+   "unit": "deg",
+   "note": "full lock right as a step, throttle held"
+  },
+  "bus.steer.at30.heading_1s": {
+   "v": 21.027,
+   "cls": "angle",
+   "unit": "deg",
+   "note": "full lock right as a step, throttle held"
+  },
+  "bus.steer.at30.heading_2s": {
+   "v": 51.233,
+   "cls": "angle",
+   "unit": "deg",
+   "note": "full lock right as a step, throttle held"
+  },
+  "bus.steer.at30.yaw_rate_2s": {
+   "v": 31.761,
+   "cls": "rate",
+   "unit": "deg/s"
+  },
+  "bus.steer.at30.release_t_settle": {
+   "v": 0.4,
+   "cls": "time",
+   "unit": "s",
+   "note": "steering released: until |yaw rate| < 2 deg/s"
+  },
+  "bus.steer.at30.release_drift": {
+   "v": 5.889,
+   "cls": "angle",
+   "unit": "deg",
+   "note": "heading change from release to settle"
+  },
+  "bus.steer.at30.release_speed_6s": {
+   "v": 29.991,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.steer.at50.heading_0.25s": {
+   "v": 2.644,
+   "cls": "angle",
+   "unit": "deg",
+   "note": "full lock right as a step, throttle held"
+  },
+  "bus.steer.at50.heading_0.5s": {
+   "v": 7.019,
+   "cls": "angle",
+   "unit": "deg",
+   "note": "full lock right as a step, throttle held"
+  },
+  "bus.steer.at50.heading_1s": {
+   "v": 16.007,
+   "cls": "angle",
+   "unit": "deg",
+   "note": "full lock right as a step, throttle held"
+  },
+  "bus.steer.at50.heading_2s": {
+   "v": 34.788,
+   "cls": "angle",
+   "unit": "deg",
+   "note": "full lock right as a step, throttle held"
+  },
+  "bus.steer.at50.yaw_rate_2s": {
+   "v": 19.124,
+   "cls": "rate",
+   "unit": "deg/s"
+  },
+  "bus.steer.at50.release_t_settle": {
+   "v": 0.417,
+   "cls": "time",
+   "unit": "s",
+   "note": "steering released: until |yaw rate| < 2 deg/s"
+  },
+  "bus.steer.at50.release_drift": {
+   "v": 5.305,
+   "cls": "angle",
+   "unit": "deg",
+   "note": "heading change from release to settle"
+  },
+  "bus.steer.at50.release_speed_6s": {
+   "v": 49.987,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.slalom.peak_lateral": {
+   "v": 27.091,
+   "cls": "dist",
+   "unit": "m",
+   "note": "40 km/h, full lock R/L alternating every 1 s for 8 s, throttle held"
+  },
+  "bus.slalom.peak_yaw_rate": {
+   "v": 27.163,
+   "cls": "rate",
+   "unit": "deg/s"
+  },
+  "bus.slalom.final_speed": {
+   "v": 36.589,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.slalom.final_heading": {
+   "v": 20.581,
+   "cls": "angle",
+   "unit": "deg"
+  },
+  "bus.stand.steer_drift": {
+   "v": 0,
+   "cls": "zero",
+   "unit": "",
+   "note": "steering left/right at rest, no pedal"
+  },
+  "bus.stand.steer_heading": {
+   "v": 0,
+   "cls": "zero",
+   "unit": ""
+  },
+  "bus.stand.held": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "vehicle.held after standing still with no key"
+  },
+  "bus.stand.tap_distance": {
+   "v": 0.223,
+   "cls": "dist",
+   "unit": "m",
+   "note": "throttle tapped 0.3 s from rest, then released"
+  },
+  "bus.stand.tap_peak_speed": {
+   "v": 3.024,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.stand.tap_t_to_rest": {
+   "v": 0.533,
+   "cls": "time",
+   "unit": "s",
+   "note": "after release until speed is exactly 0"
+  },
+  "bus.stand.downhill5_drift": {
+   "v": 0,
+   "cls": "zero",
+   "unit": "",
+   "note": "parked on a 5 deg downhill, no key, 5 s"
+  },
+  "bus.wall.head.speed_before": {
+   "v": 30,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "30 km/h with throttle into a wall, keys released at the hit"
+  },
+  "bus.wall.head.fwd_speed_0.1s": {
+   "v": 0.091,
+   "cls": "wallspeed",
+   "unit": "km/h",
+   "note": "km/h along the heading (< 0 = moving back)"
+  },
+  "bus.wall.head.fwd_speed_0.5s": {
+   "v": 0,
+   "cls": "wallspeed",
+   "unit": "km/h",
+   "note": "km/h"
+  },
+  "bus.wall.head.rebound_dist": {
+   "v": 0,
+   "cls": "walldist",
+   "unit": "m",
+   "note": "m moved back from the position at the hit, max over 2 s"
+  },
+  "bus.wall.head.heading_change": {
+   "v": 0.266,
+   "cls": "wallangle",
+   "unit": "deg",
+   "note": "deg after 2 s"
+  },
+  "bus.wall.head.contact_reported": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "vehicle.wallContact set at the hit"
+  },
+  "bus.wall.head.contact_impact": {
+   "v": 8.33,
+   "cls": "info",
+   "unit": "",
+   "note": "wallContact.impact (m/s into the wall before the step)"
+  },
+  "bus.wall.head.contact_normal_y": {
+   "v": 1,
+   "cls": "info",
+   "unit": "",
+   "note": "wallContact normal, wall -> car (car came from +y)"
+  },
+  "bus.wall.head.nose_dip_min": {
+   "v": -1.666,
+   "cls": "info",
+   "unit": "",
+   "note": "vehicle.impactPitch min (deg, < 0 = nose down)"
+  },
+  "bus.wall.head.nose_dip_max": {
+   "v": 0,
+   "cls": "info",
+   "unit": ""
+  },
+  "bus.wall.press.heading_change": {
+   "v": 1.542,
+   "cls": "info",
+   "unit": "",
+   "note": "throttle held 3 s against the wall"
+  },
+  "bus.wall.press.moved": {
+   "v": 0.175,
+   "cls": "walldist",
+   "unit": "m",
+   "note": "m"
+  },
+  "bus.wall.press.speed": {
+   "v": 0,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.wall.glance.speed_before": {
+   "v": 30,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "30 km/h, wall 30 deg off the heading, throttle held"
+  },
+  "bus.wall.glance.speed_0.5s": {
+   "v": 27.521,
+   "cls": "wallspeed",
+   "unit": "km/h",
+   "note": "km/h"
+  },
+  "bus.wall.glance.speed_1s": {
+   "v": 27.05,
+   "cls": "wallspeed",
+   "unit": "km/h",
+   "note": "km/h"
+  },
+  "bus.wall.glance.heading_0.5s": {
+   "v": 17.11,
+   "cls": "wallangle",
+   "unit": "deg",
+   "note": "deg turned (+ = right, toward the wall direction)"
+  },
+  "bus.wall.glance.heading_2s": {
+   "v": 26.323,
+   "cls": "wallangle",
+   "unit": "deg",
+   "note": "deg turned after 2 s (30 = parallel to the wall)"
+  },
+  "bus.wall.glance.along_2s": {
+   "v": 14.844,
+   "cls": "walldist",
+   "unit": "m",
+   "note": "m travelled along the wall in 2 s"
+  },
+  "bus.wall.glance.centre_to_wall_2s": {
+   "v": 1.713,
+   "cls": "walldist",
+   "unit": "m",
+   "note": "m from the car centre to the wall line after 2 s"
+  },
+  "bus.sp.teleport.pos_error": {
+   "v": 0,
+   "cls": "zero",
+   "unit": "",
+   "note": "getPosition() right after reset(100, 50, 90 deg)"
+  },
+  "bus.sp.teleport.heading_error": {
+   "v": 0,
+   "cls": "zero",
+   "unit": ""
+  },
+  "bus.sp.teleport.speed_after": {
+   "v": 0,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "reset() at 50 km/h: velocity cleared"
+  },
+  "bus.sp.teleport.drift_2s": {
+   "v": 0,
+   "cls": "zero",
+   "unit": "",
+   "note": "no key for 2 s after the reset"
+  },
+  "bus.sp.teleport.throttle_2s": {
+   "v": 20.157,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "throttle after a reset: drives off normally"
+  },
+  "bus.sp.swap.body_count_kept": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "destroy() removes every body it created"
+  },
+  "bus.sp.swap.speed_1step": {
+   "v": 49.997,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "swapped to car at 50 km/h, throttle held"
+  },
+  "bus.sp.swap.speed_1s": {
+   "v": 49.999,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.sp.rollon_sbahn.speed_1step": {
+   "v": 29.783,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "reset + 30 km/h set on all bodies, no key"
+  },
+  "bus.sp.rollon_sbahn.t_to_rest": {
+   "v": 2.267,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.sp.rollon_sbahn.d_to_rest": {
+   "v": 9.518,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "bus.sp.rollon_edge.speed_1step": {
+   "v": 10.583,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "reset + 10.8 km/h set on all bodies, no key"
+  },
+  "bus.sp.rollon_edge.t_to_rest": {
+   "v": 0.783,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.sp.rollon_edge.d_to_rest": {
+   "v": 1.218,
+   "cls": "dist",
+   "unit": "m"
+  },
+  "bus.sp.air.speed_after_0.6s_brake": {
+   "v": 49.977,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "airborne at 49.997 km/h, brake + full lock held 0.6 s"
+  },
+  "bus.sp.air.heading_change": {
+   "v": 0,
+   "cls": "angle",
+   "unit": "deg"
+  },
+  "bus.sp.air.speed_after_landing_brake_0.5s": {
+   "v": 37.532,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "wheels down again, brake 0.5 s: brakes work"
+  },
+  "bus.sp.air.passes_wall": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "airborne car passes through a wall"
+  },
+  "bus.sp.air.push_dist_0.6s": {
+   "v": 2.1,
+   "cls": "dist",
+   "unit": "m",
+   "note": "3.5 m/s set on the main body only (jump push), airborne 0.6 s"
+  },
+  "bus.sp.air.push_speed_0.6s": {
+   "v": 12.598,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.sp.air.spawned_airborne_speed": {
+   "v": 35.991,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "spawned airborne with 36 km/h, 0.5 s"
+  },
+  "bus.sp.nohold.speed_after_2s": {
+   "v": 25.179,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "noHold, no key, from 30 km/h"
+  },
+  "bus.sp.nohold.creep_dist_1s": {
+   "v": 0.033,
+   "cls": "dist",
+   "unit": "m",
+   "note": "noHold, 0.36 km/h creep, no key, 1 s (not held)"
+  },
+  "bus.sp.mask_other_wall.passed": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "mask = tunnel bit: an ordinary wall is passed"
+  },
+  "bus.sp.mask_own_wall.passed": {
+   "v": 0,
+   "cls": "bool",
+   "unit": "",
+   "note": "mask = tunnel bit: tunnel wall stops the car"
+  },
+  "bus.sp.shift.speed_0.5s": {
+   "v": 30,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "all bodies moved 1 m sideways at 30 km/h"
+  },
+  "bus.sp.shift.lateral_kept": {
+   "v": 1,
+   "cls": "dist",
+   "unit": "m",
+   "note": "m east of an unshifted twin after 0.5 s (1 = shift kept)"
+  },
+  "bus.sp.slope_up5.speed_20s": {
+   "v": 50,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "5 deg nose-up tilt, throttle, limit 50"
+  },
+  "bus.sp.slope_down5.speed_20s": {
+   "v": 50,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "-5 deg nose-up tilt, throttle, limit 50"
+  },
+  "bus.sp.slope_up5.brake_at_rest_drift": {
+   "v": 0.213,
+   "cls": "info",
+   "unit": "",
+   "note": "brake held at rest uphill (reverse engages after a moment)"
+  },
+  "bus.sp.limit_lowered.speed_1s": {
+   "v": 58.543,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "cruising at 70, Speed set to 30, throttle held"
+  },
+  "bus.sp.limit_lowered.speed_2s": {
+   "v": 47.106,
+   "cls": "speed",
+   "unit": "km/h"
+  },
+  "bus.sp.limit_lowered.t_to_31": {
+   "v": 4.917,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.sp.limit_lowered.final": {
+   "v": 30,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "after 15 s"
+  },
+  "bus.sp.both_pedals.from30_speed_2s": {
+   "v": 4.672,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "throttle + brake held together 2 s from 30 km/h (signed, forward +)"
+  },
+  "bus.sp.both_pedals.from_rest_speed_2s": {
+   "v": 0.105,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "throttle + brake held together 2 s from rest"
+  },
+  "bus.sp.bumpy.throttle_speed_20s": {
+   "v": 50,
+   "cls": "speed",
+   "unit": "km/h",
+   "note": "pitch +-1 deg at 2 Hz, throttle, limit 50"
+  },
+  "bus.sp.bumpy.coast50_t_stop": {
+   "v": 3.767,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.sp.bumpy.coast50_d_stop": {
+   "v": 26.197,
+   "cls": "dist",
+   "unit": "m",
+   "note": "keys released at 50 on the bumpy road"
+  },
+  "bus.sp.ice.t_to_30": {
+   "v": 16.5,
+   "cls": "time",
+   "unit": "s",
+   "note": "grip 0.25 / rear 0.175, full throttle"
+  },
+  "bus.sp.ice.brake30_t_stop": {
+   "v": 5.883,
+   "cls": "time",
+   "unit": "s"
+  },
+  "bus.sp.ice.brake30_d_stop": {
+   "v": 24.753,
+   "cls": "dist",
+   "unit": "m",
+   "note": "full braking from 30 on ice"
+  },
+  "bus.sp.ball.car_moved": {
+   "v": 0,
+   "cls": "zero",
+   "unit": "",
+   "note": "parked vehicle hit by the ball: does not move"
+  },
+  "bus.sp.ball.car_turned": {
+   "v": 0,
+   "cls": "zero",
+   "unit": ""
+  },
+  "bus.sp.ball.ball_bounced_back": {
+   "v": 1,
+   "cls": "bool",
+   "unit": ""
+  },
+  "bus.opt.power0.5.free_t_to_50": {
+   "v": 11.767,
+   "cls": "time",
+   "unit": "s",
+   "note": "?power=0.5, Speed free"
+  },
+  "bus.opt.power0.5.limit50_t_to_40": {
+   "v": 9.4,
+   "cls": "time",
+   "unit": "s",
+   "note": "?power=0.5, Speed 50"
+  },
+  "bus.opt.power2.free_t_to_50": {
+   "v": 2.067,
+   "cls": "time",
+   "unit": "s",
+   "note": "?power=2, Speed free"
+  },
+  "bus.opt.power2.limit50_t_to_40": {
+   "v": 3.983,
+   "cls": "time",
+   "unit": "s",
+   "note": "?power=2, Speed 50"
+  },
+  "bus.opt.unknown_handling_is_default": {
+   "v": 1,
+   "cls": "bool",
+   "unit": "",
+   "note": "?handling=<unknown> drives exactly like the default"
+  }
+ }
+}
