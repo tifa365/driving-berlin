@@ -55,6 +55,7 @@ body.loading #sbahnOff { visibility: hidden !important; }
   border: 1px solid #c55; color: #fff; font-size: 15px; line-height: 1.4; }
 #loading .err small { display: block; margin-top: 6px; color: #f0c0c0; font: 12px ui-monospace, Menlo, Consolas, monospace; word-break: break-word; }
 #loading.failed .err { display: block; }
+#loading .datanote { margin: 14px 0 0; max-width: 46ch; font-size: 13px; line-height: 1.4; color: #a9acb2; }
 #loading .keys { margin-top: 26px; font-size: 14px; color: #d8dade; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7); }
 #loading .keys .kc.s { min-width: 24px; height: 24px; font-size: 12px; }
@@ -84,6 +85,7 @@ const HTML = `
     <span class="tk t"><span class="ti">${ICON.jump}</span> springen</span>
     <span class="tk t"><span class="ti">${MENU_ICON}</span> Menü</span>
   </div>
+  <p class="datanote">Das Spiel lädt etwa 100 MB zum Start und weitere Daten beim Fahren. Am besten mit WLAN und am Computer nutzen, um Daten zu sparen.</p>
 </div>
 ${CREDITS_HTML}`;
 

@@ -1,5 +1,7 @@
 # Driving Berlin
 
+> The game loads about 100 MB to start and more data while driving. Best used on Wi-Fi and on a computer, to save data.
+
 *racing/ - drive through the Berlin mesh.* Public name: **driving-berlin** (GitHub repo
 `driving-berlin`, tiles as the Hugging Face dataset `driving-berlin-tiles`); see "Publishing" at the end.
 
