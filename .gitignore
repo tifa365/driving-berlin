@@ -1,0 +1,8 @@
+# build outputs (build_level.py)
+levels/
+__pycache__/
+# publishing (tools/publish_site.py, tools/stage_tiles.py) - staged copies, not sources
+site/
+driving-berlin-tiles/
+# picture crops of the mesh for the roof survey (find_roofs.py): local only
+roof_crops/
