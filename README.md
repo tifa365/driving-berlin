@@ -81,18 +81,11 @@ Chrome or Chromium, and `python3 serve.py 8765` running). Exit code 0 means all 
 *Driving Berlin* is a free, non-commercial hobby project. The 3D mesh belongs to its provider
 (below); the project is not affiliated with or endorsed by Berlin Partner or the State of Berlin.
 
-- **3D mesh:** *3D-Meshmodell Berlin 2025 © Berlin Partner für Wirtschaft und Technologie GmbH*
-  (attribution text from the open-data register entry).
-  **Not an open licence.** The Berlin open-data register entry "3D-Meshmodell Berlin"
-  (publisher Senatsverwaltung für Wirtschaft, Energie und Betriebe; harvested copy checked
-  2026-11-21 at `https://www.govdata.de/ckan/api/3/action/package_show?id=lod2-gebaudedaten-berlin`,
-  original `https://daten.berlin.de/datensaetze/3d-meshmodell-berlin`) lists the portal
-  resource with licence `http://dcat-ap.de/def/licenses/other-closed` and points to the terms
-  of use at `https://www.businesslocationcenter.de/berlin3d-downloadportal/resources/terms/terms.de.html`
-  (on 2026-11-21 that URL answered with the portal's maintenance page; no archived copy found).
-  The terms could not be read while the portal was down; publishing the tiles is the owner's
-  decision (2026-11-21), with full credit and without any claim of permission.
-  In the game: the city picture (3D tiles) and the street heights.
+- **3D mesh:** *3D-Meshmodell Berlin 2025 © Berlin Partner für Wirtschaft und Technologie GmbH*.
+  Source: the Berlin 3D download portal (`https://www.businesslocationcenter.de/berlin3d-downloadportal/`),
+  listed in the Berlin open-data register as "3D-Meshmodell Berlin"
+  (`https://daten.berlin.de/datensaetze/3d-meshmodell-berlin`). The data belongs to the provider and its
+  terms of use apply. In the game: the city picture (3D tiles) and the street heights.
 - **OpenStreetMap:** © OpenStreetMap contributors, ODbL 1.0 (`https://www.openstreetmap.org/copyright`).
   In the game: streets and street names, building outlines (walls), water, bridges, tunnels, the
   S-Bahn route, Ortsteile, the map.
@@ -108,7 +101,7 @@ Chrome or Chromium, and `python3 serve.py 8765` running). Exit code 0 means all 
   (`assets/fonts/`, licence in `assets/fonts/OFL-1.1.txt`, `FONTLOG.txt`). In the game: the
   street-name plates, the title and the place-name sign.
 - **Sky picture:** `assets/sky/sky.webp`, from the Skyfall Protocol project, used with its
-  author's permission (the owner's statement, 2026-11-22). In the game: the sky (no mood, day
+  author's permission. In the game: the sky (no mood, day
   mood) and the sky light on car and bus.
 - **Leaflet** (BSD-2, from cdnjs) is used only by `map.html`, a developer tool page that is not
   published.

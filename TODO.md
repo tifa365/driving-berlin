@@ -7,7 +7,7 @@ and built afterwards.
 - Phone test on the live address; touch layout fixes (portrait mode, top-right menu button).
 - Render-resolution setting for weak graphics chips.
 - KTX2 textures to cut download size and GPU memory.
-- A contact / takedown line for the data provider; optionally ask the provider in writing.
+- A contact line in the README.
 - Station doors: the deck stops at Alexanderplatz and Hackescher Markt were not re-derived
   after the Friedrichstraße fix; three bail-out points were removed by hand.
 - Bundestag roof: the sunken ring round the dome still rides as ramps.
