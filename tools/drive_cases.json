@@ -1,0 +1,140 @@
+{
+ "about": "Data of the test suite (tools/test.sh). A fixed bug report becomes a line here, so nothing breaks twice. Poses: level frame x east, z = -north (m); heading clockwise from north (rad), forward = (sin h, -cos h). Positions come from the level files where they have them (spots.json, bridges.json, sbahn.json, roofs_deck.json, level.json); only what no file holds is written here.",
+ "static": {
+  "closed_heads_accepted": [
+   {
+    "head": "Marie-Elisabeth-Lüders-Steg start",
+    "why": "footbridge end at a building wall (2026-11-21 audit, accepted)"
+   },
+   {
+    "head": "way/992679670 start",
+    "why": "ends at a building wall (2026-11-21 audit, accepted)"
+   },
+   {
+    "head": "way/992679670 end",
+    "why": "audit margin 1.5 cm (2026-11-21 audit, accepted)"
+   }
+  ],
+  "bench_known_fail": {
+   "car.wall.press.moved": "ref 0.106 m, now 0",
+   "car.wall.glance.speed_0.5s": "ref 8.8 km/h, now 14.4",
+   "car.wall.glance.speed_1s": "ref 2.6 km/h, now 10.6",
+   "car.wall.glance.along_2s": "ref 3.1 m, now 7.4",
+   "car.wall.glance.centre_to_wall_2s": "ref 1.39 m, now 1.21",
+   "bus.wall.press.moved": "ref 0.175 m, now 0"
+  },
+  "bench_reason": "accepted wall-contact differences of the new car model adopted on 2026-11-21 (the car slides along a wall instead of sticking to it; no built-in sideways creep when pressed against a wall). tools/vehicle_ref.json and VEHICLE_INTERFACE.md 6.8 describe the previous model. Not a bug."
+ },
+ "drive": {
+  "spots": {
+   "seconds": 3,
+   "min_m": 3,
+   "why": "every spot link starts the car where it can drive off (stuck-at-start reports, 2026-11-20/21)",
+   "expect": {},
+   "expect_note": "per-spot exceptions: {\"<slug>\": {\"min_m\": 0, \"why\": \"...\"}} for a spot that faces an object on purpose"
+  },
+  "bridges": {
+   "names": [
+    "Südliche Monbijoubrücke",
+    "Nördliche Monbijoubrücke"
+   ],
+   "back_m": 10,
+   "seconds": 4,
+   "min_past_m": 8,
+   "why": "2026-11-21: the car stopped 2-3 m short of the museum-side heads (rails from the closed-water test); after the fix it drives ~12.5 m through every head. Heads = first / last point of `line` in bridges.json. The broken data is kept as levels/mitte_all/bridges.json.pre-heads."
+  },
+  "sbahn": {
+   "max_s": 20,
+   "why": "each station door (sbahn.json entrances, `approach` pose) puts the car on the tracks (door on the wrong building, 2026-11-21)"
+  },
+  "roof": {
+   "route": "bundestag",
+   "headings": [
+    0,
+    3.1416
+   ],
+   "max_s": 40,
+   "tol_m": 2,
+   "why": "a fall from the roof ends back on the roof at the route's start (js/roofs.js FALL_TO = 'start', owner 2026-11-21), roof mode on"
+  },
+  "border": [
+   {
+    "name": "east",
+    "road": [
+     2115.1,
+     -80.5,
+     2210.3,
+     -83.9
+    ],
+    "road_note": "primary road crossing the east border (map.json)",
+    "start_gap_m": 60
+   },
+   {
+    "name": "west",
+    "road": [
+     -2051.6,
+     560.5,
+     -2225.2,
+     545.7
+    ],
+    "road_note": "tertiary road crossing the west border (map.json)",
+    "start_gap_m": 60
+   }
+  ],
+  "border_rule": {
+   "seconds": 25,
+   "min_gap_m": 1,
+   "turn_within_s": 15,
+   "end_gap_m": 60,
+   "why": "the level border stops the car (car centre stays >= 1 m inside level.json extent) and the automatic turn-around brings it back inside"
+  },
+  "memorial": {
+   "spot": "mahnmal",
+   "text": "Respect is Everything.",
+   "max_s": 20,
+   "why": "entering the memorial's no-drive zone shows the line (js/respect.js, owner 2026-11-21)"
+  },
+  "coast": {
+   "from_kmh": 50,
+   "s": 2.8,
+   "m": 19,
+   "tol": 0.2,
+   "why": "releasing all keys at 50 km/h stops the car in ~2.8 s / 19 m (owner-accepted, VEHICLE_INTERFACE.md); start = level.json spawn (a straight street)"
+  },
+  "map_drive": {
+   "spot": "fussball-reichstag",
+   "why": "map driving (hidden): N opens the map paused, W starts driving on it, closing the map leaves the car where it is"
+  },
+  "defaults": {
+   "camH": 50,
+   "camD": 90,
+   "sbahn": [
+    50,
+    90
+   ],
+   "speed": 70,
+   "obstacles": false,
+   "blinkers": true,
+   "detail": "normal",
+   "why": "README / owner standard 2026-11-22 (camera 50 / 90 on street and tracks, speed 70, obstacles off)"
+  },
+  "progress_keys": [
+   "berlinDrive.eggs.found",
+   "berlinDrive.balloon.cut",
+   "berlinDrive.pos"
+  ],
+  "session_progress_keys": [
+   "berlinDrive.resume"
+  ],
+  "test_progress": {
+   "berlinDrive.eggs.found": "[\"mitte_all.bear.01\"]",
+   "berlinDrive.balloon.cut": "1"
+  },
+  "test_settings": {
+   "berlinDrive.speedLimit": "50",
+   "berlinDrive.blinkers": "0",
+   "berlinDrive.detail": "low",
+   "berlinDrive.cam7.height": "40"
+  }
+ }
+}
