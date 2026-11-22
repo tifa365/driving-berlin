@@ -6,7 +6,6 @@ and built afterwards.
 ## Known and deferred
 - Phone test on the live address; touch layout fixes (portrait mode, top-right menu button).
 - Render-resolution setting for weak graphics chips.
-- Mention the first-load size (about 105 MB) on the loading screen.
 - KTX2 textures to cut download size and GPU memory.
 - A contact / takedown line for the data provider; optionally ask the provider in writing.
 - Station doors: the deck stops at Alexanderplatz and Hackescher Markt were not re-derived
