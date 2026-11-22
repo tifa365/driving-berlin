@@ -20,3 +20,11 @@ and built afterwards.
 
 ## Ideas
 (add here)
+
+## Ideas from looking at another photomesh game (Skyfall Protocol, Lyon; read for ideas only, no code taken)
+1. A failed tile must never hide its parent: swap to finer tiles only when all of them loaded; retry failures with a growing delay.
+2. Let detail follow the frame time: coarsen quickly when frames get slow or memory is full, refine slowly.
+3. Keep tiles in the browser between visits (Cache Storage, keyed by tile address plus a dataset version, with a size cap), so a second visit downloads almost nothing.
+4. Choose the memory budget from the device's memory instead of a fixed value.
+5. Light fog to blend away the coarse tiles in the distance; a sky/light direction that matches the sun baked into the photos.
+6. A water surface for the Spree made from the flat, low triangles of the mesh inside a river outline.

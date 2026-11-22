@@ -879,14 +879,14 @@ const lookAheadM = () => mapClamped(vehicle.speedKmh, 0, 160, 5, 30);
 // default: behind the car (head-up), low enough to look down the street
 // (?northup=1: north-up instead, e.g. at ~40 deg tilt with height 65, distance 55)
 const cam = { headUp: !params.has('northup'), direction: 0, zoom: zoomAtRest, offX: 0, offZ: 0,
-              height: 60, dist: 80, target: new THREE.Vector3() };   // owner's standard since 2026-11-21 (was 60 / 60)
+              height: 50, dist: 90, target: new THREE.Vector3() };   // owner's standard since 2026-11-22 (was 60 / 80, before that 60 / 60)
 // moods keep the owner's view and its saved sliders; ?skycam=1 opts into the low
 // mood camera (horizon in frame), with its own saved slider values
 const skyCam = !!mood && params.has('skycam');
 if (skyCam) Object.assign(cam, mood.cam);
-// two slider sets: street (cam6, the values above) and S-Bahn rails mode (own keys, 30/50);
+// two slider sets: street (cam7, the values above) and S-Bahn rails mode (own keys, 30/50);
 // cam.height / cam.dist are the live (blended) values the camera code reads
-const camKey = 'berlinDrive.cam6.' + (skyCam ? mood.name + '.' : '');
+const camKey = 'berlinDrive.cam7.' + (skyCam ? mood.name + '.' : '');
 const camKeySbahn = 'berlinDrive.cam4.sbahn.' + (skyCam ? mood.name + '.' : '');
 // look-ahead capped so the car stays in frame: at most 60 % of the ground visible
 // between the look point and the bottom edge (short distance sliders left it behind at speed)
