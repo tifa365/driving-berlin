@@ -49,6 +49,16 @@
 //           without being seen; seen again = refines at once. Verdicts are reused for
 //           OCC_STALE ms and computed within a work budget per pass (OCC_WORK). Off:
 //           setOcclusion(false) (localStorage 'berlinDrive.occlusion' = '0'). See makeOcclusion.
+//   start   (coarse-ready, 2026-11-22) the game starts before full detail: ready() resolves on the
+//           first selection pass where the START_RULE holds for the main view (no visible root
+//           missing = no hole; a wanted refinement of a tile whose culling sphere is within
+//           groundR of the car is never pending (the car's ground is the level it will stay at)
+//           and no tile there is cross-fading; within nearR at most nearLevel pending, beyond at
+//           most farLevel). Until then only what the rule needs is requested: finer main-view
+//           tiles, the L1 ring, the look-ahead and the base layer are held, except the roots
+//           within baseR of the car (at base priority). From ready on everything runs as before
+//           (the rest of the base layer at base priority, P_BASE, after everything else).
+//           startMissing / stats().start: tiles the rule still misses.
 // stats(): counts, MB, .events: downgrade / hole / evict / thrash / cancel counters (headless
 // checks, see MITTE_STREAMING_PLAN.md "Streaming fixes"), .occlusion (kept / keptTotal ...).
 import * as THREE from 'three';
@@ -64,6 +74,11 @@ const P_SIB = 400, P_LEAD = 1e5, P_PREF = 2.5e5, P_RING = 3e5, P_BASE = 4e5;   /
 const OCC_HOLD = 1000;   // ms a tile must stay hidden without a break before it stops refining
 const OCC_LEADS = [0.75, 1.5, 2.25, 3];   // s: occlusion eyes ahead (include the LEADS)
 const OCC_WORK = 6000, OCC_STALE = 300, OCC_OLD = 1000;   // work units per pass (ray samples + 20 per box test); verdict age (ms): recomputed / unusable
+// coarse-ready start rule (see "start" above); live and tunable: berlinDrive.stream.startRule
+//   groundR m around the car: refined as far as the view wants (the car's ground, no swap later)
+//   nearR / nearLevel: within it no drawn tile coarser than nearLevel where finer is wanted
+//   farLevel: the rest of the view; baseR m: roots loaded during the start besides the visible ones
+export const START_RULE = { groundR: 12, nearR: 120, nearLevel: 2, farLevel: 3, baseR: 300 };
 const NONE = 0, LOADING = 1, PARSED = 2, READY = 3, FAILED = 4;
 const OFF = 0, IN = 1, ON = 2, OUT = 3;                              // fade modes
 const ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -248,7 +263,8 @@ export function makeOcclusion(meta, buf, nEyes = 3) {
 
 // keepBase: the base layer (see above); aniso: anisotropic filtering for new tiles (Detail)
 // tiles: tile root URL (site.json on the published site); unset = tiles.json's "base"
-export async function createStreamer({ scene, camera, renderer, mood, url, tiles: tilesUrl = null, budgetMB = 768, tau = 24, aniso = 4, keepBase = true }) {
+// start: overrides of START_RULE for this streamer
+export async function createStreamer({ scene, camera, renderer, mood, url, tiles: tilesUrl = null, budgetMB = 768, tau = 24, aniso = 4, keepBase = true, start = null }) {
   // occlusion data next to tiles.json (build_occluders.py); missing = no occlusion step
   const occUrl = new URL('occlusion.json', new URL(url, document.baseURI)).href;
   const occP = fetch(occUrl).then(async (r) => {
@@ -303,6 +319,10 @@ export async function createStreamer({ scene, camera, renderer, mood, url, tiles
   let yaw = null, yawRate = 0, lastCar = 0, halfDiag = 0.5;
   let eyeT = 0, speed = 0, speedF = 1, kmh = 0;                       // camera speed (m/s), tau factor
   let baseOn = false, gov = 1, mainBytes = 0, prevMain = 0, pendMiss = 0, room = budget, mainMissing = 1;
+  // start phase (coarse-ready): starting until the START_RULE holds once; startAt = car (or eye)
+  const rule = { ...START_RULE, ...(start || {}) };
+  let starting = true, startMissing = 1, startMs = null, startPasses = 0;
+  const startAt = { x: 0, z: 0 }, readyWaiters = [], startDrawn = { ground: {}, near: {}, far: {} };
   const enterQ = [], waiters = [], fading = new Set(), loading = new Set();
   const out = [], q = [], cand = [], regions = [];
   const lvSum = {}, lvN = {};                                          // GPU bytes per level, for estimates
@@ -350,8 +370,14 @@ export async function createStreamer({ scene, camera, renderer, mood, url, tiles
     return (1 + 0.35 * ss(0.55, 1, ang / halfDiag)) * (1 + 0.25 * ss(600, 1500, d));
   }
   const sse = (t, k, d) => t.ge * k / Math.max(d, 1e-3);
+  // refine cap (setRefineCap; index.html's Horizont view): { level: metres } - a tile of that level
+  // refines only while its sphere is within that distance of the eye. A flat view puts kilometres
+  // of tiles in the frustum; the screen-space error alone would refine them as far as it does
+  // under a steep view (it does not depend on the angle). null = no cap (the standard view).
+  let cap = null;
+  const capped = (t, d) => cap !== null && d > (cap[t.level] ?? Infinity);
   function wantsRefine(t, k, d) {
-    if (t.leaf) return false;
+    if (t.leaf || capped(t, d)) return false;
     return t.refined ? sse(t, k, d) > HYST * tau * gov : sse(t, k, d) > tau * speedF * gov * fovea(t, d);
   }
   function kidFadingIn(t) { for (const c of t.kids) if (c.mode === IN) return true; return false; }
@@ -383,6 +409,12 @@ export async function createStreamer({ scene, camera, renderer, mood, url, tiles
     return t.occHid;
   }
 
+  // start rule: horizontal distance of t's culling sphere from the car / does refining t count
+  const startD = (t) => Math.max(0, Math.hypot(t.cs.center.x - startAt.x, t.cs.center.z - startAt.z) - t.cs.radius);
+  function startNeeds(t) {
+    const d = startD(t);
+    return t.level > (d < rule.groundR ? 0 : d < rule.nearR ? rule.nearLevel : rule.farLevel);
+  }
   // main pass: pushes the tiles to draw. Every pushed tile is READY; a tile is either drawn
   // itself or ALL its children are ready and take over (no partial refinement, no holes).
   function select(t, k) {
@@ -390,13 +422,20 @@ export async function createStreamer({ scene, camera, renderer, mood, url, tiles
     const d = dist(t);
     if (t.state !== READY) {                      // only roots: nothing coarser
       need(t, d); t.refined = false;
-      if (t.state !== FAILED) mainMissing++;
+      if (t.state !== FAILED) { mainMissing++; startMissing++; }   // a hole
       return;
     }
     // no LOD change while a cross-fade of this region runs (a tile fading in does not refine
     // yet, a parent whose children fade in does not coarsen yet): masks of 3 levels would leave
     // dither pixels covered by nobody
-    if (t.mode === IN && draw.has(t)) { if (wantsRefine(t, k, d) && !occluded(t)) mainMissing++; t.refined = false; out.push(t); return; }
+    if (t.mode === IN && draw.has(t)) {
+      const w = wantsRefine(t, k, d) && !occluded(t);
+      if (w) mainMissing++;
+      // start: the car's ground settles first (both fading tiles are probed), and a wanted
+      // refinement the rule needs is still to come
+      if (starting && (startD(t) < rule.groundR || (w && startNeeds(t)))) startMissing++;
+      t.refined = false; out.push(t); return;
+    }
     // hidden behind buildings: no refinement (a refined one coarsens; its fade still finishes)
     const wr = wantsRefine(t, k, d), hid = wr && occluded(t);
     if (hid) { occSt.kept++; if (t.refined && !kidFadingIn(t)) occSt.coarsened++; }
@@ -408,14 +447,19 @@ export async function createStreamer({ scene, camera, renderer, mood, url, tiles
         for (const c of t.kids) if (visible(c)) select(c, k);
         return;
       }
+      // start phase: detail the start rule does not need is held until the game runs
+      const sn = starting && startNeeds(t);
+      if (starting && !sn) {
+        for (const c of t.kids) if (c.state !== READY && c.state !== FAILED && visible(c)) mainMissing++;
       // admission: the missing cohort must fit next to the view set (parent stays meanwhile)
-      if (prevMain + pendMiss + miss <= room) {
+      } else if (prevMain + pendMiss + miss <= room) {
         pendMiss += miss;
         for (const c of t.kids) {
           if (c.state === READY) continue;
           const v = visible(c);
           need(c, dist(c) + (v ? 0 : P_SIB));
           if (v && c.state !== FAILED) mainMissing++;
+          if (sn && c.state !== FAILED) startMissing++;   // all of them: the parent refines only with every child
         }
       } else ev.admit++;
     }
@@ -427,7 +471,7 @@ export async function createStreamer({ scene, camera, renderer, mood, url, tiles
     const d = dist(t);
     touch(t, false, off + d);
     if (t.state !== READY) { need(t, off + d); return; }
-    if (t.leaf || sse(t, k, d) <= tau * lt * speedF * gov * fovea(t, d)) return;
+    if (t.leaf || capped(t, d) || sse(t, k, d) <= tau * lt * speedF * gov * fovea(t, d)) return;
     if (occluded(t)) { occSt.aheadKept++; return; }   // hidden from all eyes: children not needed
     for (const c of t.kids) {
       const p = off + dist(c) + (visible(c) ? 0 : P_SIB);
@@ -483,11 +527,12 @@ export async function createStreamer({ scene, camera, renderer, mood, url, tiles
       for (const r of roots) { r.base = on; if (on && r.obj) baseBytes += r.bytes; }
     }
     room = 0.97 * budget - (baseOn ? Math.max(baseBytes, roots.length * est(roots[0].level)) : 0);
-    mainBytes = 0; pendMiss = 0; mainMissing = 0;
+    mainBytes = 0; pendMiss = 0; mainMissing = 0; startMissing = 0;
     const H = renderer.domElement.clientHeight || innerHeight;
     const k = H / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
     setFrustum(camera);
     trackSpeed(car);
+    if (car) { startAt.x = car.x; startAt.z = car.z; } else { startAt.x = eye.x; startAt.z = eye.z; }
     // look-ahead poses: the camera moved by the car's velocity and turned about it by its
     // yaw rate (computed first: the occlusion test of the main pass also asks these eyes)
     let nLead = 0;
@@ -531,7 +576,7 @@ export async function createStreamer({ scene, camera, renderer, mood, url, tiles
     // budget governor: the view set near the room left -> coarser, slowly back when it frees
     if (mainBytes > 0.85 * room) gov = Math.min(GOV_MAX, gov * 1.03);
     else if (mainBytes < 0.7 * room) gov = Math.max(1, gov / 1.01);
-    if (car) {
+    if (car && !starting) {   // start phase: no look-ahead, no ring (the start rule's tiles first)
       if (nLead) {
         pcam.fov = Math.min(100, camera.fov * LEAD_FOV); pcam.aspect = camera.aspect;
         pcam.near = camera.near; pcam.far = camera.far;
@@ -558,7 +603,12 @@ export async function createStreamer({ scene, camera, renderer, mood, url, tiles
       if (R.until && now > R.until) { regions.splice(i, 1); continue; }
       for (const r of roots) region(r, R);
     }
-    if (baseOn) for (const r of roots) { touch(r, false, P_BASE); if (r.state !== READY) need(r, P_BASE + dist(r)); }
+    // base layer; in the start phase only the roots within baseR of the car (the visible ones come
+    // from the main pass), the rest once the game runs - last in the queue, after the view
+    if (baseOn) for (const r of roots) {
+      touch(r, false, P_BASE);
+      if (r.state !== READY && (!starting || startD(r) < rule.baseR)) need(r, P_BASE + dist(r));
+    }
     next.clear();
     for (const t of out) next.add(t);
     swap();
@@ -798,7 +848,11 @@ export async function createStreamer({ scene, camera, renderer, mood, url, tiles
     now = performance.now();
     const dt = Math.min(100, now - (lastNow || now)); lastNow = now;
     while (enterQ.length) {                       // time-sliced (see the header): textures uploaded before the first draw
-      const t = enterQ.shift();
+      // most relevant first (queue priority: the main view near the eye before look-ahead / ring / base),
+      // so after a start or a jump the area around the car fills in before the rest
+      let bi = 0;
+      for (let i = 1; i < enterQ.length; i++) if (enterQ[i].prio < enterQ[bi].prio) bi = i;
+      const t = enterQ.splice(bi, 1)[0];
       if (obsolete(t)) {                          // wanted by nobody any more: never uploaded
         disposeObj(t.obj); bytes -= t.bytes; if (t.base) baseBytes -= t.bytes;
         t.obj = null; t.bytes = 0; t.state = NONE; ev.obsoleteAvoided++;
@@ -816,6 +870,18 @@ export async function createStreamer({ scene, camera, renderer, mood, url, tiles
       // idle = every tile the main view wants (drawn path + visible children of refinements)
       // is in; look-ahead, prefetch, ring and base may still be loading
       if (waiters.length && mainMissing === 0) waiters.splice(0).forEach((r) => r());
+      // coarse-ready: the start rule holds (something drawn, no request of it still out)
+      if (starting) {
+        startPasses++;
+        if (startMissing === 0 && draw.size > 0) {
+          starting = false; startMs = Math.round(now); dirty = true;
+          for (const t of draw) {   // what was drawn at the start, by zone (stats().start)
+            const d = startD(t), z = d < rule.groundR ? startDrawn.ground : d < rule.nearR ? startDrawn.near : startDrawn.far;
+            z['L' + t.level] = (z['L' + t.level] || 0) + 1;
+          }
+          readyWaiters.splice(0).forEach((r) => r());
+        }
+      }
     }
     stepFades(dt);
   }
@@ -848,7 +914,7 @@ export async function createStreamer({ scene, camera, renderer, mood, url, tiles
     let pinMB = 0, viewMB = 0;
     for (const t of tiles) { if (t.obj && t.pin === pass && !t.base) pinMB += t.bytes; if (t.obj && t.pinMain === pass && !t.base) viewMB += t.bytes; }
     return {
-      loaded: tiles.filter((t) => t.state === READY || t.state === PARSED).length, inflight, queued,
+      loaded: tiles.filter((t) => t.state === READY || t.state === PARSED).length, inflight, queued, entering: enterQ.length,
       wanted: want.size, visible: by((t) => draw.has(t)), loadedByLevel: by((t) => t.state === READY),
       failed: tiles.filter((t) => t.state === FAILED).length, fading: fading.size,
       MB: Math.round(bytes / 1e5) / 10, baseMB: Math.round(baseBytes / 1e5) / 10, base: baseOn,
@@ -857,6 +923,8 @@ export async function createStreamer({ scene, camera, renderer, mood, url, tiles
       reservedMB: Math.round(reservedB / 1e5) / 10, peakMB: Math.round(peak / 1e5) / 10,
       gpuTextures: renderer.info.memory.textures, tileMeshes: tiles.reduce((s, t) => s + (t.obj ? 1 : 0), 0),
       jump: { ...jump, sinceMs: jumpAt ? Math.round(performance.now() - jumpAt) : null },
+      // start: coarse-ready reached? at (page ms), passes until then, tiles the rule still misses
+      start: { ready: !starting, atMs: startMs, passes: startPasses, missing: starting ? startMissing : 0, rule: { ...rule }, drawn: startDrawn },
       kmh: Math.round(kmh), speedFactor: +speedF.toFixed(2), governor: +gov.toFixed(2), regions: regions.length,
       events: { ...ev },
       // kept = tiles the occlusion step kept from refining in the last pass (main view),
@@ -877,9 +945,17 @@ export async function createStreamer({ scene, camera, renderer, mood, url, tiles
     update, stats, tiles, events: ev, prefetchAt,
     get mainMissing() { return mainMissing; },   // tiles the main view still misses (last selection pass; failed ones not counted) - js/loading.js progress
     idle: () => new Promise((r) => { waiters.push(r); dirty = true; }),   // resolves once every tile the main view wants is in (look-ahead / prefetch / base may still be loading)
+    // coarse-ready (START_RULE): resolves once the start view is covered well enough to drive; the
+    // view keeps refining afterwards. startMissing = tiles the rule still waits for (js/loading.js)
+    ready: () => new Promise((r) => { if (!starting) r(); else { readyWaiters.push(r); dirty = true; } }),
+    get startMissing() { return starting ? startMissing : 0; },
+    get starting() { return starting; },
+    startRule: rule,   // live: berlinDrive.stream.startRule.nearR = 200 (takes effect while starting)
     setBudget(mb) { budget = Math.max(16, +mb) * 1e6; dirty = true; evict(); return budget / 1e6; },
     get budgetMB() { return budget / 1e6; },
     setTau(v) { tau = Math.max(4, +v); dirty = true; return tau; },
+    setRefineCap(c) { cap = c ? { ...c } : null; dirty = true; return cap; },   // { level: m } or null (see `capped`)
+    get refineCap() { return cap; },
     get tau() { return tau; },
     resetPeak() { peak = bytes; },
     setAniso(v) { aniso = Math.max(1, Math.min(maxAniso, +v || 1)); return aniso; },   // new tiles only (no re-upload)

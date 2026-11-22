@@ -6,20 +6,23 @@
 //   loading.step(text, frac)       // phase 1: level files, frac 0..1 of that phase (index.html calls it per await)
 //   loading.setStart(x, z)         // start pose known: "Berlin-<Ortsteil>" for the plate (areas.json)
 //   loading.firstFrame()           // the game rendered its first frame: the dark cover gives way to the view
-//   loading.tiles(stream)          // phase 2: the tiles of the first view (js/stream.js), done on stream.idle()
+//   loading.tiles(stream)          // phase 2: the tiles of the first view (js/stream.js), done on stream.ready() (coarse-ready)
 //   loading.done()                 // finished (no stream level, or called by tiles()); fades out
 //   loading.fail(err)              // load error in plain words; the screen stays
 //   loading.open / .named          // up? / the name on its plate ("Berlin-Mitte"; menu header fallback)
 //   loading.hide(), loading.show() // harmless no-ops (old berlinDrive.intro API, scratch scripts call hide())
 //
 // Progress: one bar, real numbers only. Phase 1 = 0 .. 30 % (index.html steps), phase 2 = 30 .. 100 %:
-// entered tiles / (entered + tiles the main view still misses) from the streamer, shown only
-// ever forward and held below 100 % until stream.idle() resolves (failed tiles do not count as
-// missing in the streamer, so a failing tile cannot hang it). Safety net: after SAFETY_S in
-// phase 2 the game starts anyway ("lädt im Hintergrund weiter").
+// entered tiles / (entered + tiles the start rule still misses: stream.startMissing) from the
+// streamer, shown only ever forward and held below 100 % until stream.ready() resolves =
+// coarse-ready (js/stream.js START_RULE: no hole, coarse detail in view, the car's ground final;
+// failed tiles do not count as missing, so a failing tile cannot hang it). The city keeps
+// sharpening while the player drives. Safety net: after SAFETY_S in phase 2 the game starts
+// anyway ("lädt im Hintergrund weiter"), rarely needed now.
 // The game view is the background: the canvas gets a CSS filter blur + brightness that
 // eases from strong to none with the same progress value (coarse steps, CSS transition,
-// only toward sharp), and the filter is removed when the screen goes. Until the first frame a
+// only toward sharp) until coarse-ready, and the filter is removed when the screen goes; the
+// sharpening after that is the real tiles refining. Until the first frame a
 // plain dark cover. Input: a capture keydown listener swallows every key while up; the game
 // also holds its physics (index.html pause reason 'load'). body.loading hides the HUD.
 
@@ -85,7 +88,7 @@ const HTML = `
     <span class="tk t"><span class="ti">${ICON.jump}</span> springen</span>
     <span class="tk t"><span class="ti">${MENU_ICON}</span> Menü</span>
   </div>
-  <p class="datanote">Das Spiel lädt etwa 100 MB zum Start und weitere Daten beim Fahren. Am besten mit WLAN und am Computer nutzen, um Daten zu sparen.</p>
+  <p class="datanote">Das Spiel lädt etwa 70 MB zum Start und weitere Daten beim Fahren. Am besten mit WLAN und am Computer nutzen, um Daten zu sparen.</p>
 </div>
 ${CREDITS_HTML}`;
 
@@ -155,15 +158,19 @@ export function createLoading({ base = '', canvas = null, parent = document.body
     if (!stream) { done(); return; }
     status('Die Stadt lädt: Häuser, Straßen, Bäume …');
     const t0 = performance.now();
+    // coarse-ready (stream.ready(), START_RULE in js/stream.js): drivable before full detail;
+    // an older streamer without it: the whole first view (idle())
+    const coarse = typeof stream.ready === 'function';
     let idle = false;
-    stream.idle().then(() => { idle = true; });
+    (coarse ? stream.ready() : stream.idle()).then(() => { idle = true; });
     const poll = () => {
       if (finished || failed) return;
       if (idle) { done(); return; }
-      const ev = stream.events || {}, miss = Number.isFinite(stream.mainMissing) ? stream.mainMissing : null;
+      const ev = stream.events || {}, m = coarse ? stream.startMissing : stream.mainMissing;
+      const miss = Number.isFinite(m) ? m : null;
       if (miss !== null) {
         const got = ev.enter || 0, f = got + miss > 0 ? got / (got + miss) : 0;
-        progress(PHASE1 + (1 - PHASE1) * Math.min(0.97, f));   // 100 % only on idle()
+        progress(PHASE1 + (1 - PHASE1) * Math.min(0.97, f));   // 100 % only on ready()
       }
       if (performance.now() - t0 > SAFETY_S * 1000) { status('Die Stadt lädt im Hintergrund weiter …'); done(); return; }
       pollT = setTimeout(poll, 250);
