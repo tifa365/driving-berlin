@@ -51,6 +51,8 @@ export const HELP_CSS = `
 .bdhelp .src { display: grid; gap: 1px; margin: 0 0 10px; padding: 0 0 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   font-size: 13px; line-height: 1.4; color: #b9bcc1; }
 .bdhelp .src b { color: #eee; font-weight: 600; }
+.bdhelp .src a.repo { color: #9fd0ff; text-decoration: underline; text-underline-offset: 2px; padding: 6px 0; display: inline-block; pointer-events: auto; }
+.bdhelp .src a.repo:hover, .bdhelp .src a.repo:focus-visible { color: #fff; }
 `;
 
 const MENU_ICON = '<svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true"><path d="M5 7 H19 M5 12 H19 M5 17 H19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
@@ -133,6 +135,8 @@ export const SOFTWARE = [
   { name: 'Himmel (Himmelsbild, assets/sky/sky.webp)', by: 'Skyfall Protocol', licence: 'mit Erlaubnis des Autors',
     use: 'der Himmel und das Himmelslicht auf Auto und Bus', short: 'Himmel: Skyfall Protocol, mit Erlaubnis des Autors' },
 ];
+// the public repository: shown as a link on the menu's Info page only (owner 2026-11-22)
+export const REPO_URL = 'https://github.com/tifa365/driving-berlin';
 const escT = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 // the short line (loading screen, end of the menu's Info page)
 export const CREDITS_HTML = `<p class="bdcredits">
@@ -141,7 +145,8 @@ export const CREDITS_HTML = `<p class="bdcredits">
 export function sourcesHtml() {
   const row = (d) => `<div class="src"><b>${escT(d.name)}</b><span>${escT(d.by)}</span>` +
     `<span>Lizenz: ${escT(d.licence)}</span><span>im Spiel: ${escT(d.use)}</span></div>`;
-  return `<h3 class="srch">Daten &amp; Quellen</h3>${DATASETS.map(row).join('')}<h3 class="srch">Software, Schrift &amp; Himmel</h3>${SOFTWARE.map(row).join('')}`;
+  return `<h3 class="srch">Daten &amp; Quellen</h3>${DATASETS.map(row).join('')}<h3 class="srch">Software, Schrift &amp; Himmel</h3>${SOFTWARE.map(row).join('')}` +
+    `<h3 class="srch">Quelltext</h3><div class="src"><a class="repo" href="${REPO_URL}" target="_blank" rel="noopener">${REPO_URL.replace('https://', '')}</a></div>`;
 }
 
 // bears in the level's eggs.json (same file js/eggs.js reads; browser-cached)
