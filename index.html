@@ -884,10 +884,10 @@ const cam = { headUp: !params.has('northup'), direction: 0, zoom: zoomAtRest, of
 // mood camera (horizon in frame), with its own saved slider values
 const skyCam = !!mood && params.has('skycam');
 if (skyCam) Object.assign(cam, mood.cam);
-// two slider sets: street (cam7, the values above) and S-Bahn rails mode (own keys, 30/50);
+// two slider sets: street (cam7, the values above) and S-Bahn rails mode (own keys, same standard);
 // cam.height / cam.dist are the live (blended) values the camera code reads
 const camKey = 'berlinDrive.cam7.' + (skyCam ? mood.name + '.' : '');
-const camKeySbahn = 'berlinDrive.cam4.sbahn.' + (skyCam ? mood.name + '.' : '');
+const camKeySbahn = 'berlinDrive.cam7.sbahn.' + (skyCam ? mood.name + '.' : '');
 // look-ahead capped so the car stays in frame: at most 60 % of the ground visible
 // between the look point and the bottom edge (short distance sliders left it behind at speed)
 function lookAhead() {
@@ -936,13 +936,8 @@ camReset(); camReady = true;
 const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } },
                 set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
 const sliders = { height: [$('camH'), $('camHv')], dist: [$('camD'), $('camDv')] };
-// one-time migration: the old cam3 values were tuned on the viaduct -> S-Bahn set
-if (!skyCam) for (const key of ['height', 'dist']) {
-  const old = store.get('berlinDrive.cam3.' + key);
-  if (old != null && store.get(camKeySbahn + key) == null) store.set(camKeySbahn + key, old);
-}
 const camSets = { street: { key: camKey, height: cam.height, dist: cam.dist },
-                  sbahn: { key: camKeySbahn, height: 30, dist: 50 } };
+                  sbahn: { key: camKeySbahn, height: cam.height, dist: cam.dist } };   // owner 2026-11-22: the same standard on the tracks (was 30 / 50)
 let camSetName = 'street', camBlend = null;   // camBlend: { t, height, dist } start values
 const camSetNow = () => (sbahn?.active ? 'sbahn' : 'street');
 function showCamSet() {
@@ -1474,7 +1469,8 @@ function jumpStep(dt) {
 
 // ---------- map edge (js/edge.js): glass wall on the level border, soft cushion, U = turn around ----------
 const edge = createEdge({ extent: level.extent, groundAt, vehicle: () => vehicle, busy: () => !!sinking, endJump,
-                          spotClear, isWater: (x, z) => !sbahn?.active && !tunnels?.active && !roofs?.active && isWater(x, z), isPit });   // U on the viaduct: the Spree below is no obstacle
+                          spotClear, isWater: (x, z) => !sbahn?.active && !tunnels?.active && !roofs?.active && isWater(x, z), isPit,
+                          onTouch: () => borderShimmer?.pulse() });   // border touched / turned around: a shimmer pulse   // U on the viaduct: the Spree below is no obstacle
 // ---------- easter egg (js/sbahn.js): Stadtbahn - secret door at Jannowitzbruecke, the car drives on the viaduct ----------
 sbahn = createSbahn({ data: sbahnData, scene, world, vehicle: () => vehicle, edge,
                       place: (x, z, h) => window.berlinDrive.teleport(x, z, h) });
@@ -1504,6 +1500,10 @@ import('./js/dust.js').then((m) => { dust = m.createDust({ mood, carScale: CAR_S
   get vehicle() { return vehicle; }, get y() { return carY; }, get air() { return !!jump?.air; }, get vy() { return jump ? jump.vy : 0; },
   get off() { return !!sinking || !!tunnels?.active || !!edge?.turning; }, get under() { return !!tunnels?.active; }, get rail() { return !!sbahn?.active; },
 } }); }).catch((e) => console.warn('dust off:', e));
+// ---------- border shimmer (js/bordershimmer.js): now and then a wave of light along the level border near the car; own scene after the edge glass ----------
+let borderShimmer = null;
+import('./js/bordershimmer.js').then((m) => { borderShimmer = m.createBorderShimmer({ extent: level.extent, groundAt, vehicle: () => vehicle, mood,
+  hidden: () => loading.open || pauseBy.has('map') || !!mapDrive || !!tunnels?.active }); }).catch((e) => console.warn('border shimmer off:', e));
 // ---------- skid marks (js/skid.js): dark strips under sliding tyres (dust's triggers), fade over ~10 s; drawn in the shadow pass ----------
 let skid = null;
 import('./js/skid.js').then((m) => { skid = m.createSkid({ scene: shadowScene, mood, carScale: CAR_SCALE, car: {
@@ -1670,6 +1670,7 @@ function frame(now) {
   balloon.update(dt);   // cycle, ride range; during a ride it takes the camera after updateCamera
   doves?.update(dt, !!tunnels?.active);   // js/doves.js: after the camera is final; none in a tunnel
   dust?.update(dt);   // js/dust.js: after the physics steps (vehicle + ride height final for the frame)
+  borderShimmer?.update(dt);   // js/bordershimmer.js: game dt (pause / slow motion), hidden far from the border
   skid?.update(dt);   // js/skid.js: same moment as the dust; not called while paused, so marks do not age
   if (sights) { const p = vehicle.getPosition(); sights.update(dt, p.x, p.y); }   // js/sights.js: clock digits + storks, only near the car
   if (areaSign) { const p = vehicle.getPosition(); areaSign.update(dt, p.x, p.y, !!sinking || !!sbahn?.active || !!tunnels?.active || !!roofs?.active || !!edge?.turning || !!balloon?.riding, meshLoaded,
@@ -1810,6 +1811,7 @@ function drawPasses() {
   balloon.draw(renderer, camera);   // Weltballon: depth-tested, not an occluder, no ghost
   doves?.draw(renderer, camera);   // doves: own scene, depth-tested against world + car, no ghost; nothing while none fly
   edge.draw(renderer, camera);   // 4) map-edge glass over everything, depth-tested, no depth writes
+  borderShimmer?.draw(renderer, camera);   // border shimmer: additive, depth-tested, no depth writes; nothing away from the border
 }
 // streamed level: place the camera, the game counts as loaded once the spawn view is in;
 // the loading screen follows the first view's tiles and lets go of the game when it ends
@@ -1860,6 +1862,7 @@ window.berlinDrive = {
   get skid() { return skid; },   // skid marks (js/skid.js): opts (live), setEnabled(bool) (saved as berlinDrive.skid), clear(), enabled, laid
   get dust() { return dust; },   // street dust (js/dust.js): puff(kind?, k?), setEnabled(bool) (saved as berlinDrive.dust), enabled, alive, rough, opts
   get areaSign() { return areaSign; },   // street-name plate (js/areasign.js): show(name), opts (live tuning), state() (candidate, why, last decision)
+  get borderShimmer() { return borderShimmer; },   // border shimmer (js/bordershimmer.js): pulse(), setEnabled(bool) (saved as berlinDrive.shimmer), enabled, opts
   get doves() { return doves; },   // white doves (js/doves.js): release(n?), setEnabled(bool) (saved as berlinDrive.doves), enabled, active, next, opts
   // top speed km/h (0 = free), as the Speed dropdown: berlinDrive.speedLimit = 30 (saved)
   get speedLimit() { return speedLimitKmh; }, set speedLimit(v) { setSpeedLimit(v); },

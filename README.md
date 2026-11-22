@@ -188,6 +188,8 @@ retired level `mitte` and are kept as reference.
   facing back the way it came, rolling at ~11 km/h. Short trail (just spawned): turns on the
   spot. U again goes back. Test hooks: `berlinDrive.turnAround()`, `berlinDrive.edge`
   (`dist`, `gap` = nearest car corner to glass, `opacity`, `hint`, `pushT`, `turning`, `trail`).
+  **Border shimmer (`js/bordershimmer.js`):** near the border (fading in from 150 m, full at 40 m) a faint pale cyan curtain of fine vertical streaks stands on it, 28 m high on the ground, and every 2.5-4 s a band of light runs along it past the car, with a stronger pulse when the car touches the border or is turned around (additive, no collider, not a camera occluder, hidden in tunnels / while loading / on the map; moon a little brighter and bluer).
+  Numbers in `SHIMMER` at the top of the file; `berlinDrive.borderShimmer` = `{ opts, pulse(), setEnabled(bool) }` (saved as `berlinDrive.shimmer`, default on).
 - **Car drawing:** depth-tested against the mesh (buildings hide it) with a 3 m depth bias
   toward the camera, plus a faint ghost silhouette wherever it is hidden.
 - **Camera collision** (`js/camcollide.js`): when the mesh is between camera and car (or around
@@ -450,7 +452,7 @@ pits and the memorial, flat street model. Carry p50 25 m, p95 88 m, worst 150 m 
 end (Humboldthafen / Alexanderufer). `--bailouts-only` recomputes only this list (~3.5 min, ~4 GB
 RAM, no mesh); the full build writes it too. **Tiefgarage (spatial joke):** the underground-garage entrance on Am Friedrichshain (OSM node 2971353420, driveway "Am Schweizer Garten") is a door of a different kind: crossing a 6 m line at the entrance node (inward only: facing in and moving in) hands the car to the game as at a station door (kind 'sbahn'): it rolls on ~10 m along the driveway axis, slowing to 2.5 m/s and sinking 3.5 m down the ramp until it is gone (2-4 s, camera on the mouth), the screen fades to black (0.25 s), and the car is on the open deck just east of the Friedrichstrasse hall (s 3065, 25 m east of the roof edge, 100 m of open deck ahead), rolling east toward Jannowitzbruecke at the speed it had at the line (8-30 m/s), while the black fades out (0.35 s). No bear, no text. `sbahn.json` `portal`, `PORTAL` in build_sbahn.py, `--portal-only` rewrites just that key (seconds); test `berlinDrive.sbahn.portal(kmh)` (puts the car 4 m before the line, rolling in) or `portal(kmh, true)` (straight onto the deck). No water rescue or ice on the viaduct; R, teleport and the map
 drop rails mode; a mood switch on the deck stays on it. On the deck the camera sliders edit their own
-set (default height 30 / distance 50, `berlinDrive.cam4.sbahn.*`; street set `berlinDrive.cam7.*`, 50/90 (the owner's standard since 2026-11-21; older saved `cam4` / `cam5` street values are ignored),
+set (same standard as the street since 2026-11-22, was 30 / 50; `berlinDrive.cam7.sbahn.*`; street set `berlinDrive.cam7.*`, 50/90 (the owner's standard since 2026-11-21; older saved `cam4` / `cam5` street values are ignored),
 `?height=`/`?distance=` apply to it); entering or leaving rails mode blends between the two over 1.5 s. Rebuild (~2 min, local mesh + the
 `build_map.py` OSM cache): `python3 racing/build_sbahn.py --name mitte_all [--png]`; it prints
 its checks (deck vs mesh, height above street, slope, corridor margin to the border, exits on

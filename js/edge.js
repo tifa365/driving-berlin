@@ -67,7 +67,7 @@ void main() {
 }`;
 
 // opts: { extent, groundAt(x, z), vehicle() -> Vehicle, busy() -> bool (sinking),
-//         endJump(), spotClear(x, z, h), isWater(x, z), isPit(x, z) }
+//         endJump(), spotClear(x, z, h), isWater(x, z), isPit(x, z), onTouch?(kind) }
 export function createEdge(opts) {
   const { extent: ex, groundAt } = opts;
   // inner faces of the Box2D border
@@ -171,6 +171,7 @@ export function createEdge(opts) {
     veh.setAirborne(true);
     turn = { t: 0, veh, h0, dh, path: t.path, cum, len: cum[cum.length - 1], target: t };
     info.turning = true;
+    opts.onTouch?.('turn');   // js/bordershimmer.js pulse (nothing shows away from the border)
     return true;
   }
   function poseAt(u) {
@@ -227,6 +228,7 @@ export function createEdge(opts) {
     }
     const gap = gapTo(veh, k, d[k]);
     info.dist = d[k]; info.gap = gap; info.side = k;   // also between frames (berlinDrive.steps)
+    if (pushing && !pushT && idleT > 0.3) opts.onTouch?.('touch');   // first contact (js/bordershimmer.js pulse)
     if (pushing) { pushT += dt; idleT = 0; } else if ((idleT += dt) > 0.3) pushT = 0;
     if (pushT >= PUSH_AUTO) { pushT = 0; turnAround(); return; }
     // trail
