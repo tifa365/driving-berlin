@@ -83,8 +83,8 @@ const HTML = `
     <span class="tk k"><span class="kc s">&larr;</span><span class="kc s">&uarr;</span><span class="kc s">&darr;</span><span class="kc s">&rarr;</span> oder <span class="kc s">W</span><span class="kc s">A</span><span class="kc s">S</span><span class="kc s">D</span> fahren</span>
     <span class="tk k"><span class="kc s">Leertaste</span> springen</span>
     <span class="tk k"><span class="kc s">Esc</span> Menü</span>
-    <span class="tk t"><span class="ti">${ICON.left}</span><span class="ti">${ICON.right}</span> lenken</span>
-    <span class="tk t"><span class="ti">${ICON.brake}</span><span class="ti">${ICON.gas}</span> Bremse / Gas</span>
+    <span class="tk t"><span class="ti">${ICON.steer}</span> links: lenken</span>
+    <span class="tk t"><span class="ti">${ICON.pedal}</span> rechts: Gas, Bremse / rückwärts</span>
     <span class="tk t"><span class="ti">${ICON.jump}</span> springen</span>
     <span class="tk t"><span class="ti">${MENU_ICON}</span> Menü</span>
   </div>

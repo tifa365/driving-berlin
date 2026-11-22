@@ -40,6 +40,7 @@ export const HELP_CSS = `
 .bdhelp .tpad > span { box-sizing: border-box; width: 44px; height: 40px; padding: 9px; color: #fff;
   background: rgba(255, 255, 255, 0.1); border: 1px solid #888; border-radius: 9px; }
 .bdhelp .tpad > span.r { width: 40px; border-radius: 50%; padding: 8px; }
+.bdhelp .tpad > span.st { padding: 3px; border-color: transparent; background: none; }   /* the stick symbol draws its own ring */
 .bdhelp .tctl .what { font-size: 14px; line-height: 1.35; }
 .bdhelp .modes { display: grid; gap: 10px; }
 .bdhelp .mode { padding: 10px 14px; background: rgba(255, 255, 255, 0.06); border: 1px solid #444; border-radius: 8px;
@@ -84,10 +85,10 @@ export function controlsHtml() {
     </ul>
   </div>
   <div class="tctl" aria-hidden="true">
-    <div class="tpad"><span>${ICON.left}</span><span>${ICON.right}</span></div>
-    <div class="what"><b>lenken</b><br><small>linker Daumen, Feld unten links</small></div>
-    <div class="tpad"><span>${ICON.brake}</span><span>${ICON.gas}</span></div>
-    <div class="what"><b>Bremse</b> &nbsp; <b>Gas</b><br><small>Bremse im Stand halten = rückwärts</small></div>
+    <div class="tpad"><span class="r st">${ICON.steer}</span></div>
+    <div class="what"><b>links: lenken</b><br><small>Steuerknüppel unten links, nach links oder rechts schieben</small></div>
+    <div class="tpad"><span class="r st">${ICON.pedal}</span></div>
+    <div class="what"><b>rechts: Gas, Bremse / rückwärts</b><br><small>Steuerknüppel unten rechts: nach oben Gas, nach unten bremsen &ndash; im Stand gehalten rückwärts</small></div>
     <div class="tpad"><span class="r">${ICON.jump}</span></div>
     <div class="what"><b>Sprung</b><br><small>hilft, wenn das Auto feststeckt</small></div>
     <div class="tpad"><span class="r">${ICON.map}</span></div>

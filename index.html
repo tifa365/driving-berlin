@@ -84,7 +84,7 @@ import { createBridges } from './js/bridges.js';   // bridges over water: drivab
 import { loadRoofs, createRoofs } from './js/roofs.js';   // easter egg: roof mode (Bundestag roof + Spree skywalk), bear lift on Paul-Loebe-Allee
 import { createLoading } from './js/loading.js';   // loading screen: the way into the game (blurred view sharpens with the progress)
 import { createMenu } from './js/menu.js';   // Esc menu (pause, settings, controls, bears, map); touch: round button top right
-import { createTouch, isCoarse } from './js/touch.js';   // touch pads on phones / tablets, feed the same key events
+import { createTouch, isCoarse } from './js/touch.js';   // touch sticks on phones / tablets, feed the same key events
 import { site, fetchBin } from './js/site.js';   // optional site.json (published copy): tile URL, gzipped .bin files
 
 const params = new URLSearchParams(location.search);
@@ -100,10 +100,12 @@ const fail = (e) => { console.error(e); speedEl.style.color = '#f66'; speedEl.te
 // ---------- pause (Esc menu, overview map) and the loading hold ----------
 // reasons: 'menu', 'map' = frozen picture (nothing rendered, no physics, no sequence clocks);
 // 'load' = the loading screen: frames render (the blurred view), physics and sequences wait.
+// 'rotate' = phone held upright (js/touch.js blocker): frozen like the menu, but during the
+// loading screen it lets 'load' run on, so tiles keep loading under the blocker.
 // On release the frame clock restarts, so no large dt; held keys are dropped both ways.
 const pauseBy = new Set(['load']);
 let pausedRedraw = false;   // resize while frozen: draw the frozen picture once more
-const isFrozen = () => pauseBy.has('menu') || pauseBy.has('map');
+const isFrozen = () => pauseBy.has('menu') || pauseBy.has('map') || (pauseBy.has('rotate') && !pauseBy.has('load'));
 
 // ---------- three.js ----------
 const renderer = new THREE.WebGLRenderer({ canvas: $('c'), antialias: true });
@@ -1236,9 +1238,10 @@ function setVehicle(choice) {
 }
 addEventListener('keyup', (e) => { keys.delete(e.key); const k = WASD[e.key.toLowerCase()]; if (k) keys.delete(k); });
 addEventListener('blur', () => keys.clear());
-// touch devices only (js/touch.js): steer / pedal pads + jump / map / balloon buttons send the same
-// keydown / keyup events as the keys above; balloon is declared further down (getter, read later)
-createTouch({ balloon: () => balloon });
+// touch devices only (js/touch.js): the two sticks (steer left, gas / brake right) + jump / map / balloon buttons send the same
+// keydown / keyup events as the keys above; balloon is declared further down (getter, read later).
+// Inert while paused; a phone held upright pauses the game (reason 'rotate') under its blocker.
+createTouch({ balloon: () => balloon, paused: () => pauseBy.size > 0, onBlock: (on) => setPause('rotate', on) });
 
 // ---------- water / pit: drive in -> sink or fall -> the Rescue Bear fishes the car out ----------
 // A pose is recorded every 0.5 s while on land; the car is put back on the
