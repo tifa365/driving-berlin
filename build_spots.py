@@ -84,8 +84,8 @@ SPOTS = [
     ("bear", "baer-maura", "Maura an der Mauerstraße", ("egg", "mitte_all.bear.19"), {"start": (-552.4, 1480.0, -2.134)}),
     # Checkpoint Charlie photo group (doorway.json photo-group) in front of the guard hut: start on Friedrichstrasse north of it, facing south
     ("photo", "checkpoint", "Checkpoint Charlie: Fotos am Wachhaus", ("doorway", "mitte_all.photo.1"), {"reach": 3.0, "pref": 35, "side": (0.0, -1.0)}),
-    # roof bear (eggs.json roof): the link starts the car on the Lueders-Haus hall roof 32 m west of her, facing her
-    ("bear", "baer-lotte", "Lotte auf dem Lüders-Haus", ("roof", "bundestag", "mitte_all.bear.17"), {"start": (-1250.0, 261.0, math.pi / 2)}),
+    # roof bear (eggs.json roof): the link starts the car on the Lueders-Haus roof 33 m west of her, facing her (east)
+    ("bear", "baer-lotte", "Lotte auf dem Lüders-Haus", ("roof", "bundestag", "mitte_all.bear.17"), {"start": (-1224.5, 262.9, math.pi / 2)}),
     # doorway figure (doorway.json, build_eggs.DOORWAYS) at the red house on the east side of the garden of
     # Albrechtstrasse 14: start west of it on Albrechtstrasse, driving east into the garden, so figure, fountain and
     # Lola the bear are all ahead

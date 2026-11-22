@@ -2,7 +2,7 @@
 
 ![Driving Berlin: the car on Unter den Linden](docs/screenshot-unter-den-linden.png)
 
-> The game loads about 100 MB to start and more data while driving. Best used on Wi-Fi and on a computer, to save data.
+> The game loads about 70 MB to start and more data while driving. Best used on Wi-Fi and on a computer, to save data.
 
 *racing/ - drive through the Berlin mesh.* Public name: **driving-berlin** (GitHub repo
 `driving-berlin`, tiles as the Hugging Face dataset `driving-berlin-tiles`); see "Publishing" at the end.
@@ -223,9 +223,9 @@ Local disk only (the portal is down): the level needs the mesh tiles of the bbox
 
 Controls: arrows or W A S D drive (hold down at standstill = reverse), V head-up (default, camera behind the car) / north-up (`?northup=1`), B car/bus, R = Zum Start (back to the start position, progress kept), F show walls. Handling: `?handling=arcade` (default: grippier tyres, faster self-centring steering, less lock at speed, 2x engine, 1.6x brakes, engine braking, lighter turn-in: 0-100 in 6 s, 100-0 in 3 s) or `classic`. While driving the screen shows only the round map with speed and street name, the street plate when it appears, the credit line, context buttons (leave the S-Bahn tracks) and the touch pads on phones; everything else is in the Esc menu. Camera sliders (height, distance at standstill; standard 50 / 90, speed zoom-out on top, capped at 1.5x by `?zoomout=`) are in the menu's settings.
 
-**Loading screen (`js/loading.js`, 2026-11-21; replaces the start screen):** the way into the game, from page load until the first view is in; then it fades out and the car can drive at once (no button). Title, "Du betrittst" + a yellow place-name sign (Ortstafel layout, CSS only: #EBA400, black inset frame, D-DIN Bold; "Berlin" large, the Ortsteil below at 45 %; areas.json at the start pose; only "Berlin" outside every Ortsteil; `ORT_CSS` / `ortSignHtml()` in `js/areasign.js`, height `--ort-h: clamp(60px, 12vh, 100px)`, 44-60 px on screens under 520 px high), one progress bar from real numbers (level files 0-30 %, then the first view's tiles: entered / (entered + still missing in the main view, `stream.mainMissing`), 100 % only on `stream.idle()`; after 60 s it lets go anyway), a status line, one line of keys (touch: the pad symbols) and the credits. The game view is the background: the canvas starts blurred (22 px) and dimmed and sharpens with the same progress; the CSS filter is removed at the end. Keys are swallowed and physics held (pause reason `load`) while it is up; the HUD is hidden (`body.loading`). Load errors show here in plain words. The driving plate names streets, so it never repeats the loading screen's Ortsteil. `berlinDrive.intro` is this object now (`open`, `named`; `hide()` / `show()` do nothing); the `localStorage` key `berlinDrive.intro` is no longer used.
+**Loading screen (`js/loading.js`, 2026-11-21; replaces the start screen):** the way into the game, from page load until the first view is in; then it fades out and the car can drive at once (no button). Title, "Du betrittst" + a yellow place-name sign (Ortstafel layout, CSS only: #EBA400, black inset frame, D-DIN Bold; "Berlin" large, the Ortsteil below at 45 %; areas.json at the start pose; only "Berlin" outside every Ortsteil; `ORT_CSS` / `ortSignHtml()` in `js/areasign.js`, height `--ort-h: clamp(60px, 12vh, 100px)`, 44-60 px on screens under 520 px high), one progress bar from real numbers (level files 0-30 %, then the first view's tiles: entered / (entered + still missing for the start rule, `stream.startMissing`), 100 % only on `stream.ready()`; after 60 s it lets go anyway, which should now rarely happen). **Coarse-ready start (2026-11-22):** the game starts as soon as the first view is covered well enough to drive, not at full detail: `START_RULE` in `js/stream.js` (`{ groundR: 12, nearR: 120, nearLevel: 2, farLevel: 3, baseR: 300 }`, live as `berlinDrive.stream.startRule`) = no hole anywhere in view, within 120 m of the car nothing coarser than L2 where finer is wanted, L3 beyond, and within 12 m of the car (its footprint) the level the view will keep, with no cross-fade running there, so a standing car is never re-seated when the finer tiles arrive. Until then the streamer requests only that: no finer tiles, no L1 ring, no look-ahead, and of the base layer only the roots within 300 m of the car (the visible ones come with the view); from the start on everything streams as before, the rest of the base layer last in the queue. While the screen is up, the car's road height is re-acquired each time a tile enters (`carGround.reset()`), so it stands on the settled surface at the start. Measured (headless, software rendering, cache off): tiles until drivable 57 / 62 / 54 MB for the default start / `?spot=weltballon` / `?spot=sbahn-friedrichstrasse` (L4 10-18 MB instead of all 46 MB), against about 93 MB before (the whole first view at L1 plus the whole base layer), a status line, one line of keys (touch: the pad symbols) and the credits. The game view is the background: the canvas starts blurred (22 px) and dimmed and sharpens with the same progress until coarse-ready; the CSS filter is removed at the end, and the sharpening after that is the real tiles refining while the player drives. Keys are swallowed and physics held (pause reason `load`) while it is up; the HUD is hidden (`body.loading`). Load errors show here in plain words. The driving plate names streets, so it never repeats the loading screen's Ortsteil. `berlinDrive.intro` is this object now (`open`, `named`; `hide()` / `show()` do nothing); the `localStorage` key `berlinDrive.intro` is no longer used.
 
-**Esc menu (`js/menu.js`):** Esc pauses the game (physics, rescue / S-Bahn / roof / tunnel / balloon timelines, doves, dust, area-sign clock; the frozen picture stays, blurred and dimmed; tiles may finish loading) and opens a list under the title (no plate in the menu): **Karte, Einstellungen, Steuerung, Info, Zum Start, Neustart** (no "Weiter": Esc, the close button top right or the touch menu button resume; arrows / Enter / Esc, mouse, touch), plus a plain line "🐻 Bären 7 / 18" (found count only; no list, names or hints in the menu). Esc in a page goes back, Esc on the list resumes; H opens it on Steuerung. Opening is a short slow motion: game time (`timeScale` in `frame()`, the physics accumulator and every `update(dt)`) eases 1 → 0 over 0.35 s while one CSS transition blurs, dims and desaturates the canvas; then the pause begins and the list fades in (0.12 s). Closing: the menu goes at once, the picture sharpens and time eases back to 1 in 0.18 s; driving keys work at once. Durations in `MENU_FX` (`js/menu.js`); `prefers-reduced-motion`: instant. N (map) stays instant. On touch a round three-bar button top right opens it. Held keys are dropped on pause and resume, and the frame clock restarts (no jump). **Einstellungen**: Stimmung, Fahrzeug, Blinker (an / aus: `berlinDrive.setBlinkers` / `.blinkers`), Tempo, Hindernisse (still off on every load), Detail (`Handy` on touch devices only), Kamera (the sliders) - each row calls the old control's function, same storage keys. The old top-row controls stay as hidden elements (`#moodSel`, `#vehicleSel`, `#speedSel`, `#detailSel`, `#collide`, `#restart`, `#eggs`, `#camH` / `#camD` in `#toprow`); keys M, B, C, V, R, N, U, G, E, Space keep working while driving. `berlinDrive.menu` (`open(page)`, `close()`), `berlinDrive.paused`. **Zum Start** = key R (the old Restart: the car back at the spawn, rescue / jump / S-Bahn / tunnel / roof ended, progress kept). **Neustart** asks once in place ("Alles zurücksetzen? Alle Bären sind wieder versteckt." - Ja, neu starten / Abbrechen, Esc = cancel), then clears the progress keys (`localStorage` `berlinDrive.eggs.found`, `berlinDrive.balloon.cut`, `berlinDrive.pos`; `sessionStorage` `berlinDrive.resume`) and reloads without `?spot=` / `?at=` (the mood parameter stays); everything held in memory (balloon start rule, football score, street-plate history, skid marks, roof / S-Bahn / tunnel modes) starts fresh with the reload. Settings are kept (mood, vehicle, speed limit, detail, camera, blinkers, dust / doves / skid switches, minimap, map hint mode, occlusion test switch). `berlinDrive.newGame()` does it without asking. **Auf Standard zurücksetzen** (quiet text button at the bottom of Einstellungen, `berlinDrive.resetSettings()`): removes every `berlinDrive.*` setting key (progress keys kept) and reloads through the mood-switch path (car kept where it is, as the default car; `?mood=`, `?maxspeed=`, `?height=`, `?distance=`, `?camcollide=` dropped), so each default comes from the code that applies it when no key is stored; the menu reopens on Einstellungen.
+**Esc menu (`js/menu.js`):** Esc pauses the game (physics, rescue / S-Bahn / roof / tunnel / balloon timelines, doves, dust, area-sign clock; the frozen picture stays, blurred and dimmed; tiles may finish loading) and opens a list under the title (no plate in the menu): **Karte, Einstellungen, Steuerung, Info, Zum Start, Neustart** (no "Weiter": Esc, the close button top right or the touch menu button resume; arrows / Enter / Esc, mouse, touch), plus a plain line "🐻 Bären 7 / 18" (found count only; no list, names or hints in the menu). Esc in a page goes back, Esc on the list resumes; H opens it on Steuerung. Opening is a short slow motion: game time (`timeScale` in `frame()`, the physics accumulator and every `update(dt)`) eases 1 → 0 over 0.35 s while one CSS transition blurs, dims and desaturates the canvas; then the pause begins and the list fades in (0.12 s). Closing: the menu goes at once, the picture sharpens and time eases back to 1 in 0.18 s; driving keys work at once. Durations in `MENU_FX` (`js/menu.js`); `prefers-reduced-motion`: instant. N (map) stays instant. On touch a round three-bar button top right opens it. Held keys are dropped on pause and resume, and the frame clock restarts (no jump). **Einstellungen**: Stimmung, Fahrzeug, Blinker (an / aus: `berlinDrive.setBlinkers` / `.blinkers`), Tempo, Hindernisse (still off on every load), Detail (`Handy` on touch devices only), Ansicht (Standard / Horizont, see "Sky and Horizont view" below), Kamera (the sliders) - each row calls the old control's function, same storage keys. The old top-row controls stay as hidden elements (`#moodSel`, `#vehicleSel`, `#speedSel`, `#detailSel`, `#collide`, `#restart`, `#eggs`, `#camH` / `#camD` in `#toprow`); keys M, B, C, V, R, N, U, G, E, Space keep working while driving. `berlinDrive.menu` (`open(page)`, `close()`), `berlinDrive.paused`. **Zum Start** = key R (the old Restart: the car back at the spawn, rescue / jump / S-Bahn / tunnel / roof ended, progress kept). **Neustart** asks once in place ("Alles zurücksetzen? Alle Bären sind wieder versteckt." - Ja, neu starten / Abbrechen, Esc = cancel), then clears the progress keys (`localStorage` `berlinDrive.eggs.found`, `berlinDrive.balloon.cut`, `berlinDrive.pos`; `sessionStorage` `berlinDrive.resume`) and reloads without `?spot=` / `?at=` (the mood parameter stays); everything held in memory (balloon start rule, football score, street-plate history, skid marks, roof / S-Bahn / tunnel modes) starts fresh with the reload. Settings are kept (mood, vehicle, speed limit, detail, view, camera, blinkers, dust / doves / skid switches, minimap, map hint mode, occlusion test switch). `berlinDrive.newGame()` does it without asking. **Auf Standard zurücksetzen** (quiet text button at the bottom of Einstellungen, `berlinDrive.resetSettings()`): removes every `berlinDrive.*` setting key (progress keys kept) and reloads through the mood-switch path (car kept where it is, as the default car; `?mood=`, `?maxspeed=`, `?height=`, `?distance=`, `?camcollide=`, `?skycam=` dropped), so each default comes from the code that applies it when no key is stored; the menu reopens on Einstellungen.
 
 **Help texts (`js/intro.js`):** the key list / touch layout (menu "Steuerung"), the two ways to play and the credits (menu "Info", loading screen) live here as shared pieces; there is no start screen any more.
 
@@ -247,11 +247,10 @@ keeps its baked noon light, so `js/mood.js` fakes the mood: a colour grade in th
 with an HDR sun, distance/height fog in the sky's horizon colour that also thickens toward the
 level border (no visible cliff), bloom + ACES in an `EffectComposer` (4x MSAA where float
 targets render, `?msaa=0` turns it off), recoloured car lights, tail lights and a headlight pool.
-A mood keeps the owner-tuned camera (50/90, the saved slider values) - that view shows no sky,
-so the mood is carried by grade, fog and lights. `?skycam=1` opts into a low camera (height
-20 m / distance 50 m, looking at a point 10 m above the road, `cam.lookUp`) that puts the horizon
-in frame; its values are saved under their own keys `berlinDrive.cam4.<mood>.*`, and the sliders
-and `?height=`/`?distance=` still override them (camera collision below keeps it out of buildings). Live tuning from the console: `berlinDrive.mood.set('fogDist', 400)` (any preset key,
+A mood keeps the chosen view (Standard 50/90 shows no sky, so the mood is carried by grade, fog
+and lights; the Horizont view below puts the horizon in frame). The day mood draws the
+photographed sky (below) in its dome and fog once the picture is loaded; moon and snow keep their
+drawn skies. Live tuning from the console: `berlinDrive.mood.set('fogDist', 400)` (any preset key,
 e.g. `sunAz`, `sunEl`, `exposure`, `sat`, `bloomStrength`, `toneExposure`; nested ones as a whole:
 `berlinDrive.mood.set('snow', { ...berlinDrive.mood.preset.snow, street: 0.4 })`), `berlinDrive.mood.preset`
 lists them. Without `?mood=` nothing of this runs.
@@ -651,7 +650,116 @@ One plate style (`PLATE_CSS`, `.bplate`, sized by `--ph`: type 70 % of the heigh
 in, rounded corners, `#fff` / `#000`) for the street plate, the loading screen and the menu; the
 title "Driving Berlin" is plain white lettering in the same font (no plate).
 
+## Sky and Horizont view
+
+**Photographed sky (`js/sky.js`, 2026-11-22):** for plain daylight ("Stimmung: Aus" and "Tag") the
+sky is a photograph, `assets/sky/sky.webp` (4096 x 2048 equirectangular, 173 KB; from the Skyfall
+Protocol project, used with its author's permission). It is loaded at start (also for the car's
+light, below); moon and snow never load it. A failed load leaves the drawn sky (day) or the plain
+colour (no mood), without an error.
+- Dome: no mood = a camera-following sphere in the main scene, drawn first without depth, and only
+  while the top of the frame reaches above the horizon (the standard camera never does, so its
+  picture and cost are unchanged); day mood = `js/mood.js` samples the picture in its own dome and
+  fog (`PHOTO_GLSL`, `#define SKY_PHOTO`). r160 has no background rotation: the shader maps
+  direction -> (u, v) with a yaw. No mipmaps, linear filtering (the screen magnifies the picture
+  everywhere), so there is no seam at the u wrap; phones get a 2048 x 1024 copy.
+- Sun: the picture's sun (measured: column u = 0.60, 47 deg up) is turned to the bearing of the
+  sun the mesh was photographed under: the car's blob shadow falls along `SUN_OFFSET` = (0.9 east,
+  0.55 north), bearing ~59 deg, so the sun stands at ~239 deg (WSW), ~43 deg up from the offset's
+  length - shadows in the photo texture, car shadow and sky agree. The day mood takes this sun too.
+- Horizon: below the horizon the picture (a hazy mirror) is never shown; the dome returns the haze
+  colour there and blends into the picture over 4 deg above it. The haze is the fog colour
+  (no mood: `scene.fog.color` itself; day mood: a light blue haze `#b2c6dc`), so the
+  fogged mesh and the sky meet without a line.
+- Sky light on car and bus (every view): an environment map from the same picture (PMREM of a small
+  sphere with the same shader and yaw, a dim city-ground tone below the horizon) on the vehicle
+  materials only (`envMapIntensity` 0.6). The city tiles never get it (no `scene.environment`: they
+  are unlit photographs). The hemisphere fill drops to 0.72 x so the car is about as bright as
+  before; paint roughness 0.72 -> 0.42 (soft sky reflection); dark grey texels of the textured
+  vehicle materials (windows) get roughness 0.12 (clearer reflection). Live:
+  `berlinDrive.sky.opts` (`env`, `fill`, `paint`, `glassRough`, `yaw`, `blend`, `haze`, ...), then
+  `berlinDrive.sky.apply()`.
+
+**Horizont view (Einstellungen "Ansicht": Standard / Horizont):** Standard is the camera as
+before (50 / 90, looking at the road). Horizont is a low chase camera with sky and skyline in
+frame: 12 m up, 34 m back, looking at a point 8 m above the road (horizon about a third from the
+top, the car inside the safe frame). Saved as `berlinDrive.view` (`standard` default,
+`horizon`); removed by "Auf Standard zurücksetzen", not touched by "Neustart". `?skycam=1` selects
+Horizont for that visit without saving. The Höhe / Abstand sliders keep their own saved sets per
+view: Standard `berlinDrive.cam7.*` and `berlinDrive.cam7.sbahn.*`, Horizont
+`berlinDrive.cam7.horizon.*` and `berlinDrive.cam7.sbahn.horizon.*` (the S-Bahn set follows the
+view the same way). Key V (head-up / north-up) is unchanged. Camera collision and the ghost
+silhouette work as in Standard. Console: `berlinDrive.setView('horizon')`, `berlinDrive.view`.
+Keeping it affordable: without a mood, Horizont turns three's scene fog into the sky's haze
+(colour `#b2c6dc`, linear 250 -> 1700 m; colour / near / far only, no shader change) so far,
+coarse tiles and the end of the level dissolve into the sky; Standard gets the startup fog
+(1200 -> 4000 m, `#9fb4c8`) back exactly. A mood keeps its own fog. The streamer gets a refine
+cap (`stream.setRefineCap`, `VIEWS.horizon.refineCap`): an L2 tile refines into L1 only within
+350 m of the eye, L3 into L2 within 900 m, the L4 base into L3 within 1600 m; beyond that the base
+layer. The screen-space error does not depend on the view angle, so a flat view would otherwise
+refine everything in its long frustum as far as a steep view does; the budget is not raised.
+Standard has no cap (`refineCap` null).
+**Roof route = Horizont (owner 2026-11-22):** on the Bundestag roof route (`js/roofs.js`) the game uses
+Horizont whatever the setting: from the moment the lift docks on the roof (the `roofUp` ride past
+its dock time) and while roof mode is on (driving, the fall and the bear's return to the roof's
+start, the ride down), blending over 1.5 s; `?spot=bundestag-dach` comes up in it at once. It is
+a temporary override: `berlinDrive.view` and the Ansicht row keep the player's choice, a choice
+made on the roof takes effect after leaving it, and the haze / refine cap follow the view in use
+(`berlinDrive.viewInUse`) and are restored exactly when it ends (lift down, exit, R, teleport, a
+spot elsewhere). The roof uses Horizont's own sliders. Camera avoidance stays off in roof mode
+as before (nothing on the deck moves the camera); the camera sits 12 m above the deck level
+(the look point follows the car's road layer), above the ~25 m roof even past its west edge.
+
+## Testing
+
+One command, run before every publish (the local server must be running: `python3 serve.py 8765`):
+
+```bash
+tools/test.sh                    # everything, one table, exit 0 = all passed
+tools/test.sh --list             # the test names
+tools/test.sh --only drive.bridge --only static.imports   # a part (substring or * pattern)
+tools/test.sh --slow             # also build_spots.py --dry-run (needs ../berlin_mesh_2025_wab)
+tools/test.sh --url http://127.0.0.1:8771/ --port 9370    # another copy of the game / DevTools port
+```
+
+A full run takes about 5 minutes (4 min 44 s measured on 2026-11-22, 83 tests) on the 2-core test machine (software rendering, no GPU):
+layer 1 about 30 s, the first load about 70 s, the drive tests seconds, the two reloads of the
+settings tests about 70 s each. Three layers:
+
+1. **Static checks** (`tools/check.mjs`, about 30 s, no browser, nothing outside the repo except
+   the parent's `osm_semantic.py` for the audit): syntax of `js/*.js`, `tools/*.mjs` and the inline
+   scripts of `index.html` / `map.html`; every relative import (static and `import()`) resolves to
+   a file that exports the imported names; every Python script compiles; the car bench against
+   `tools/vehicle_ref.json`; the bridge heads (`audit_roads.py --heads-only`, only the accepted
+   closed heads may be closed); the S-Bahn doors (`build_sbahn.py --check-doors`); the publish
+   staging into a temp folder with its guard; no `/home/<user>/` path, scratch path or mail
+   address in the files git would commit.
+2. **Start-up** (`tools/smoke.mjs`): one headless Chrome (`--use-angle=swiftshader`, fresh
+   profile) loads the game: the loading screen ends, no uncaught error, no failed request except
+   the optional `site.json`, every module is present on `window.berlinDrive`, the menu and the
+   map open paused and close again.
+3. **Drive and settings tests** (`tools/drive_tests.mjs`, same browser): physics only with
+   `berlinDrive.steps(n, keys)` + `state()` (no rendering). Every spot link drives off (>= 3 m in
+   3 s); both heads of both Monbijou bridges in both directions (>= 8 m through the head); each
+   S-Bahn door puts the car on the tracks; a roof fall ends on the roof at its start; the level
+   border holds and the turn-around brings the car back; the memorial zone shows "Respect is
+   Everything."; the coast-down from 50 km/h (2.8 s / 19 m ± 20 %); map driving (real N / W /
+   Escape keys: moves, closing keeps the position); the defaults on a fresh profile (camera
+   50 / 90 on street and tracks, speed 70, obstacles off, blinkers on, detail normal);
+   `newGame()` clears exactly the progress keys and `resetSettings()` exactly the setting keys
+   (both reload; the menu comes back on Einstellungen with the defaults).
+
+The cases and their reasons are data in `tools/drive_cases.json` (positions come from the level
+files: spots.json, bridges.json, sbahn.json, roofs_deck.json, level.json). **A fixed bug becomes a
+line there**, so nothing breaks twice. Known failures are listed with a reason, shown as `KNOWN`
+and do not fail the run (today: six wall-contact values of the car bench, the accepted
+differences of the car model adopted on 2026-11-21; `tools/vehicle_ref.json` describes the
+previous model). Not tested on purpose: how things look (shadows, signs, figures, the shimmer,
+fonts) and phones: `PLAYTEST.md` and the owner's eye.
+
 ## Publishing (GitHub Pages + Hugging Face)
+
+**First run `tools/test.sh`; publish only when it exits 0.**
 
 The public copy is a static site: game code on GitHub Pages, the 3,470 mesh tiles (1,992 MB)
 as the Hugging Face dataset `driving-berlin-tiles`. Local play is unchanged: without a
@@ -714,6 +822,9 @@ as the Hugging Face dataset `driving-berlin-tiles`. Local play is unchanged: wit
   (`assets/fonts/D-DIN-Bold.woff2`, `assets/fonts/D-DINCondensed-Bold.woff2`, licence
   `assets/fonts/OFL-1.1.txt`, `FONTLOG.txt`; shipped together by `tools/publish_site.py`). Condensed:
   street-name plates and the title; regular width: the yellow place-name sign.
+- **Sky picture:** `assets/sky/sky.webp`, from the Skyfall Protocol project, used with its
+  author's permission (the owner's statement, 2026-11-22). In the game: the sky (no mood, day
+  mood) and the sky light on car and bus. Shipped with `assets/` by `tools/publish_site.py`.
 - In the game: the small credit line bottom left (`level.attribution` + OSM), the short credit
   line on the loading screen (`CREDITS_HTML`) and the menu's Info page "Daten & Quellen" (one row
   per dataset / library: name, publisher, licence, use). All three come from one list,

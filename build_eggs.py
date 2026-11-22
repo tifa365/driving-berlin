@@ -95,9 +95,11 @@ BEARS = {
         ("Jana an der Jannowitzbrücke", "im Schatten der Stadtbahn, nicht weit vom Wasser", 52.51334, 13.42225, 3),
         # owner's spot (exact): HU Campus Nord, between Philippstrasse and Hannoversche Strasse
         ("Philippa am Campus Nord", "auf einem grünen Uni-Campus nördlich der Spree", 52.52677, 13.38288),
-        # owner's spot (exact, 2026-11-21, driving the roof): Marie-Elisabeth-Lueders-Haus hall roof, roof mode only
-        ("Lotte auf dem Lüders-Haus", "ganz oben, wo sonst nur Abgeordnete hinkommen, mit Blick auf die Spree",
-         52.520152, 13.378564, {"roof": "bundestag", "x": -1217.50, "z": 261.12}),
+        # owner's spot (exact, 2026-11-22, his car on the roof route): the reward at the east end of the roof drive, on the
+        # Marie-Elisabeth-Lueders-Haus (OSM building=government, Adele-Schreiber-Krieger-Strasse 1); moved 26 m east from
+        # (-1217.50, 261.12), same id. Deck 60.56 m, 13.1 m from the deck edge, 12.7 m from the nearest roof box; roof mode only
+        ("Lotte auf dem Lüders-Haus", "ganz oben am Ende der Fahrt über die Dächer, wo sonst nur Abgeordnete hinkommen",
+         52.520136, 13.378947, {"roof": "bundestag", "x": -1191.50, "z": 262.91}),
         # owner (2026-11-21, standing there in the car): the garden in front of Albrechtstrasse 14 / 14B (the building
         # north of it; OSM address nodes 14, 14B on / in that footprint), set back from the street behind a fence.
         # Garden fountain at the owner's car position (FOUNTAINS); Lola stands 5.8 m north of its centre, off the line from the

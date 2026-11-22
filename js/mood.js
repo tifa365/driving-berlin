@@ -11,6 +11,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { Pass } from 'three/addons/postprocessing/Pass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { PHOTO_GLSL } from './sky.js';   // day: the photographed sky (js/sky.js) in the dome and the fog
 
 // Colours are sRGB hex; tints / ambients are linear multipliers (1 = unchanged).
 // Sun: compass azimuth (deg from north) and elevation (deg); low, so the default
@@ -18,8 +19,10 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 const PRESETS = {
   // bright day: the baked noon light is right, so the mesh is left exactly as in the plain
   // game (neutral grade, no fake light, no tone mapping, bloom only on the HDR sun); the mood
-  // adds the sky, sun high in the south-west, fair-weather clouds, and the fog
+  // adds the sky, sun high in the south-west, fair-weather clouds, and the fog. photo: the
+  // photographed sky of js/sky.js replaces the drawn one once loaded (its sun sets sunAz / sunEl)
   day: {
+    photo: true,
     zenith: '#1f5fc4', mid: '#5aa2ea', horizon: '#c3def5', sun: '#fff3d6', bg: '#9cc4ee',
     sunAz: 225, sunEl: 42, sunSize: 1.3, sunInt: 30, halo: 0.25, glow: 0.12, stripes: 0, stars: 0, clouds: 0.75, moon: 0,
     sat: 1, contrast: 1, shadowTint: [1, 1, 1], highTint: [1, 1, 1], exposure: 1,
@@ -66,6 +69,9 @@ const PRESETS = {
 // fogged level edge melts into the horizon without a seam. Below the horizon the
 // sky repeats the horizon (the void past the mesh must look like fog).
 const SKY_GLSL = /* glsl */`
+#ifdef SKY_PHOTO
+${PHOTO_GLSL}
+#endif
 uniform vec3 uZenith, uMid, uHorizon, uSunCol, uSunDir;
 uniform float uSunSize, uSunInt, uHalo, uGlow, uStripes, uStars, uClouds, uMoon;
 float mHash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
@@ -76,6 +82,9 @@ float mNoise(vec2 x) {
 }
 float mFbm(vec2 x) { float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * mNoise(x); x = x * 2.03 + 7.1; a *= 0.5; } return s; }
 vec3 moodSky(vec3 d, float disc) {
+#ifdef SKY_PHOTO
+  if (uSkyOn > 0.5) return photoSky(d);   // the picture (until it is loaded: the drawn sky below)
+#endif
   if (d.y < 0.0) d = normalize(vec3(d.x, 0.0, d.z) + 1e-6);
   float y = d.y;
   vec3 c = mix(uHorizon, uMid, smoothstep(0.0, 0.12, y));
@@ -164,7 +173,7 @@ class DrawPass extends Pass {
   }
 }
 
-export function createMood(name, { renderer, scene, camera, extent, ground, groundAt }) {
+export function createMood(name, { renderer, scene, camera, extent, ground, groundAt, sky: photoSky = null }) {
   if (!name || !PRESETS[name]) { if (name) console.warn(`unknown ?mood=${name}, try ${Object.keys(PRESETS)}`); return null; }
   const params = new URLSearchParams(location.search);
   const P = structuredClone(PRESETS[name]);
@@ -185,6 +194,9 @@ export function createMood(name, { renderer, scene, camera, extent, ground, grou
     uTime: { value: 0 },
   };
   const FX = P.snow ? 'MOOD_SNOW' : null;   // structural extras (EXTRA_GLSL)
+  // photographed sky (js/sky.js): its uniforms join U; the sun stands where the picture's sun is
+  const photo = !!(P.photo && photoSky);
+  if (photo) { Object.assign(U, photoSky.uniforms); P.sunAz = photoSky.sunAz; P.sunEl = photoSky.sunEl; }
   if (FX) setupGround();
 
   // ---- mesh grade ----
@@ -193,7 +205,7 @@ export function createMood(name, { renderer, scene, camera, extent, ground, grou
     sh.vertexShader = 'varying vec3 vMoodW;\n' + sh.vertexShader.replace('#include <project_vertex>',
       '#include <project_vertex>\n  vMoodW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', `#include <common>${FX ? '\n#define ' + FX : ''}
+      .replace('#include <common>', `#include <common>${FX ? '\n#define ' + FX : ''}${photo ? '\n#define SKY_PHOTO' : ''}
 varying vec3 vMoodW;
 uniform float uSat, uContrast, uExposure, uSunLight, uFogDist, uFogHeight, uFogHeightAmt, uFogBase, uEdgeFade;
 uniform vec3 uShadowTint, uHighTint, uAmbSky, uAmbGround;
@@ -231,7 +243,7 @@ ${EXTRA_GLSL}`)
 
   // ---- sky dome: follows the camera, drawn first, writes no depth ----
   const sky = new THREE.Mesh(new THREE.SphereGeometry(4000, 48, 24), new THREE.ShaderMaterial({
-    uniforms: U, side: THREE.BackSide, depthTest: false, depthWrite: false, fog: false,
+    uniforms: U, side: THREE.BackSide, depthTest: false, depthWrite: false, fog: false, defines: photo ? { SKY_PHOTO: '' } : {},
     vertexShader: 'varying vec3 vDir; void main() { vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: `varying vec3 vDir;\n${SKY_GLSL}\nvoid main() { gl_FragColor = vec4(moodSky(normalize(vDir), 1.0), 1.0); }`,
   }));
@@ -486,7 +498,7 @@ void main() {
   apply();
 
   return {
-    name, preset: P, uniforms: U, bloom, trail, composer, carFx, cam: P.cam, samples, floatOK,
+    name, preset: P, uniforms: U, bloom, trail, composer, carFx, cam: P.cam, samples, floatOK, photo,
     gradeMaterial, attachCar, fitCar, setSize,
     frozen: !!P.frozen, iceMaterial,   // frozen water: index.html drives on it
     set(key, value) { P[key] = value; apply(); return P; },

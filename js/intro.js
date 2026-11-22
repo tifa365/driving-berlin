@@ -130,6 +130,8 @@ export const SOFTWARE = [
   { name: 'Box2D (box2dweb)', by: '© Erin Catto', licence: 'zlib', use: 'Fahrphysik', short: 'Box2D © Erin Catto (zlib)' },
   { name: 'D-DIN / D-DIN Condensed', by: '© 2017 Datto Inc.', licence: 'SIL OFL 1.1', use: 'Schrift der Schilder und des Titels',
     short: 'Schrift: D-DIN / D-DIN Condensed © Datto Inc. (SIL OFL 1.1)' },
+  { name: 'Himmel (Himmelsbild, assets/sky/sky.webp)', by: 'Skyfall Protocol', licence: 'mit Erlaubnis des Autors',
+    use: 'der Himmel und das Himmelslicht auf Auto und Bus', short: 'Himmel: Skyfall Protocol, mit Erlaubnis des Autors' },
 ];
 const escT = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 // the short line (loading screen, end of the menu's Info page)
@@ -139,7 +141,7 @@ export const CREDITS_HTML = `<p class="bdcredits">
 export function sourcesHtml() {
   const row = (d) => `<div class="src"><b>${escT(d.name)}</b><span>${escT(d.by)}</span>` +
     `<span>Lizenz: ${escT(d.licence)}</span><span>im Spiel: ${escT(d.use)}</span></div>`;
-  return `<h3 class="srch">Daten &amp; Quellen</h3>${DATASETS.map(row).join('')}<h3 class="srch">Software &amp; Schrift</h3>${SOFTWARE.map(row).join('')}`;
+  return `<h3 class="srch">Daten &amp; Quellen</h3>${DATASETS.map(row).join('')}<h3 class="srch">Software, Schrift &amp; Himmel</h3>${SOFTWARE.map(row).join('')}`;
 }
 
 // bears in the level's eggs.json (same file js/eggs.js reads; browser-cached)
