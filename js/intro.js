@@ -86,9 +86,9 @@ export function controlsHtml() {
   </div>
   <div class="tctl" aria-hidden="true">
     <div class="tpad"><span class="r st">${ICON.steer}</span></div>
-    <div class="what"><b>links: lenken</b><br><small>Steuerknüppel unten links, nach links oder rechts schieben</small></div>
-    <div class="tpad"><span class="r st">${ICON.pedal}</span></div>
-    <div class="what"><b>rechts: Gas, Bremse / rückwärts</b><br><small>Steuerknüppel unten rechts: nach oben Gas, nach unten bremsen &ndash; im Stand gehalten rückwärts</small></div>
+    <div class="what"><b>links: lenken</b><br><small>Steuerknüppel unten links: je weiter zur Seite, desto stärker</small></div>
+    <div class="tpad"><span class="r">${ICON.back}</span><span class="r">${ICON.gas}</span></div>
+    <div class="what"><b>rechts: Gas und Bremse / rückwärts</b><br><small>Bremse im Stand gehalten = rückwärts</small></div>
     <div class="tpad"><span class="r">${ICON.jump}</span></div>
     <div class="what"><b>Sprung</b><br><small>hilft, wenn das Auto feststeckt</small></div>
     <div class="tpad"><span class="r">${ICON.map}</span></div>
@@ -116,7 +116,7 @@ export function modesHtml(bears = 0) {
 export const DATASETS = [
   { name: '3D-Meshmodell Berlin 2025', short: '3D-Meshmodell Berlin 2025 © Berlin Partner für Wirtschaft und Technologie GmbH',
     by: 'Berlin Partner für Wirtschaft und Technologie GmbH (Datenregister: Senatsverwaltung für Wirtschaft, Energie und Betriebe)',
-    licence: 'keine offene Lizenz; Nutzungsbedingungen des Download-Portals, siehe Datenportal',
+    licence: 'Nutzungsbedingungen des Anbieters (Berlin 3D Download-Portal)',
     use: 'das Bild der Stadt (3D-Kacheln) und die Straßenhöhen' },
   { name: 'OpenStreetMap', short: 'Straßen, Gebäude, Wasser © OpenStreetMap-Mitwirkende (ODbL)',
     by: '© OpenStreetMap-Mitwirkende', licence: 'ODbL 1.0',

@@ -1152,6 +1152,9 @@ $('collide').addEventListener('click', (e) => { setCollision(!collision); e.curr
 
 // ---------- input (stickX steers, stickY > 0 throttle, < 0 brake) ----------
 const keys = new Set();
+// analog steering next to the keys (touch stick js/touch.js): steer -1..1 = target wheel angle as a
+// fraction of the lock (vehicle.setSteeringTarget). 0 = not in use: the keys steer exactly as before.
+const analog = { steer: 0 };
 // W A S D drive like the arrow keys (owner 2026-11-21): they enter the set under the arrow names
 const WASD = { w: 'ArrowUp', a: 'ArrowLeft', s: 'ArrowDown', d: 'ArrowRight' };
 const driveKey = (e) => (!e.ctrlKey && !e.metaKey && !e.altKey && WASD[e.key.toLowerCase()]) || e.key;
@@ -1241,7 +1244,8 @@ addEventListener('blur', () => keys.clear());
 // touch devices only (js/touch.js): the two sticks (steer left, gas / brake right) + jump / map / balloon buttons send the same
 // keydown / keyup events as the keys above; balloon is declared further down (getter, read later).
 // Inert while paused; a phone held upright pauses the game (reason 'rotate') under its blocker.
-createTouch({ balloon: () => balloon, paused: () => pauseBy.size > 0, onBlock: (on) => setPause('rotate', on) });
+createTouch({ balloon: () => balloon, paused: () => pauseBy.size > 0, onBlock: (on) => setPause('rotate', on),
+             setSteer: (v) => { analog.steer = v; } });
 
 // ---------- water / pit: drive in -> sink or fall -> the Rescue Bear fishes the car out ----------
 // A pose is recorded every 0.5 s while on land; the car is put back on the
@@ -1646,7 +1650,7 @@ if (hasClutter) import('./js/clutter.js').then((m) => m.createClutter({ base, wo
 function setPause(why, on) {
   const was = pauseBy.size > 0;
   if (on) pauseBy.add(why); else pauseBy.delete(why);
-  keys.clear();   // nothing held carries over (no accelerating after resume)
+  keys.clear(); analog.steer = 0;   // nothing held carries over (no accelerating after resume)
   if (was && !pauseBy.size) { last = performance.now(); acc = 0; }   // frame clock restarts: no big dt
 }
 // ---------- easter egg: driving on the map screen (hidden, no hint) ----------
@@ -1759,7 +1763,8 @@ function frame(now) {
 function stepOnce(keys) {
   {
     const drive = !sinking;
-    vehicle.setSteeringLever(drive ? (keys.has('ArrowRight') ? 1 : 0) - (keys.has('ArrowLeft') ? 1 : 0) : 0);
+    if (analog.steer) vehicle.setSteeringTarget(drive ? analog.steer : 0);   // touch stick: partial angles
+    else vehicle.setSteeringLever(drive ? (keys.has('ArrowRight') ? 1 : 0) - (keys.has('ArrowLeft') ? 1 : 0) : 0);
     vehicle.setThrottle(drive && (keys.has('ArrowUp') || simTime < AUTODRIVE) ? 1 : 0);
     vehicle.setBrake(drive && keys.has('ArrowDown') ? 1 : 0);
     simTime += STEP;

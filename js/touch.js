@@ -1,28 +1,30 @@
 // Touch controls for phones and tablets (symbols only, no lettering: quiet game).
 //
 //   import { createTouch } from './js/touch.js';
-//   createTouch({ balloon: () => balloon, paused: () => pauseBy.size > 0, onBlock: (on) => setPause('rotate', on) });
+//   createTouch({ balloon: () => balloon, paused: () => pauseBy.size > 0, onBlock: (on) => setPause('rotate', on),
+//                setSteer: (v) => { analog.steer = v; } });
 //
 // Shown only on touch devices: `(pointer: coarse)` at load, or the first touchstart anywhere
 // (a laptop with a touchscreen). A mouse-only desktop never sees anything of this.
-// Every control goes through the keyboard paths: it dispatches the same keydown / keyup
-// events on window that a key would (held directions once on engage and once on release, so
-// index.html's `keys` set - via driveKey, behind the pauseBy gate - holds exactly what a held
-// key would hold; one-shot buttons send keydown + keyup). Nothing in the game reads touch directly.
+// Buttons go through the keyboard paths: they dispatch the same keydown / keyup events on
+// window that a key would (gas / back once on press and once on release, so index.html's `keys`
+// set - via driveKey, behind the pauseBy gate - holds what a held key would hold; one-shot
+// buttons send keydown + keyup). Only steering is analog (setSteer, see below).
 //
-// Two sticks (2026-11-22, replace the steering pad and the pedal pad), game-controller look:
-// a round base with a knob in the middle, each knob held to ONE axis (faint arrowheads on it).
-//   left stick, bottom left:   x only: right -> ArrowRight, left -> ArrowLeft (steering)
-//   right stick, bottom right: y only: up -> ArrowUp (gas), down -> ArrowDown (brake; held at
-//                              standstill = reverse, as the game already does)
-// Knob offset / base radius (the knob travels up to 0.55), hysteresis: engage 0.25, release 0.15.
-// Floating start: a thumb landing in a stick's lower quarter (lower half, outer 40 % of the
-// width; on the left below the minimap) puts that base under the thumb; on the resting base it
-// stays put. One finger per stick, own pointer capture each, so both thumbs + a button work at once.
-// Released (keys up, knob springs back) on pointerup / pointercancel / lostpointercapture, window
-// blur, page hidden, and whenever the game pauses (paused(): menu, map, loading, rotate);
-// while paused the controls are inert.
-//   round (above the right stick): jump (Space), map (N) beside it, balloon ride (E) above the
+// Left stick + two buttons (2026-11-22, owner), game-controller look:
+//   left stick, bottom left: a round base, the knob follows the thumb freely inside it (travel =
+//     base radius - knob radius). Only its HORIZONTAL part counts: it steers analog through
+//     setSteer(v), v = steerCurve(x) in -1..1 (dead zone 0.08 of the travel, then sign * |x|^1.6),
+//     which index.html hands to vehicle.setSteeringTarget(v). The vertical part is deliberately
+//     unused. Floating start: a thumb landing in the lower half of the left 40 % (below the
+//     minimap) puts the base under the thumb; on the resting base it stays put.
+//   right, bottom right: Gas (larger, ArrowUp) and Back (75 %, ArrowDown = brake, held at a
+//     standstill = reverse: the game's rule), digital on the key path; a thumb may slide between.
+// Stick, buttons: own pointer captures, so steering + gas + a button work at once.
+// Released (steer 0, keys up, knob springs back) on pointerup / pointercancel /
+// lostpointercapture, window blur, page hidden, the rotate blocker, and whenever the game pauses
+// (paused(): menu, map, loading, rotate); while paused the controls are inert.
+//   round (above gas / back): jump (Space), map (N) beside it, balloon ride (E) above the
 //          jump only while the car stands at the Weltballon platform.
 // The S-Bahn "Runter von den Gleisen" button (#sbahnOff) is already tappable, so G has no pad.
 //
@@ -55,11 +57,11 @@ export const isCoarse = () => coarse;
 const svg = (body) => `<svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true">${body}</svg>`;
 const LINE = 'fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"';
 export const ICON = {
-  // steering stick: ring, knob, arrowheads left / right; pedal stick: arrowheads up / down
+  // steering stick: ring, knob, arrowheads left / right; gas / back buttons: triangles up / down
   steer: svg(`<circle cx="12" cy="12" r="10" ${LINE} stroke-width="1.6"/><circle cx="12" cy="12" r="4.6" fill="currentColor"/>` +
     '<path d="M2.9 12 L5.4 9.8 V14.2 Z M21.1 12 L18.6 9.8 V14.2 Z" fill="currentColor"/>'),
-  pedal: svg(`<circle cx="12" cy="12" r="10" ${LINE} stroke-width="1.6"/><circle cx="12" cy="12" r="4.6" fill="currentColor"/>` +
-    '<path d="M12 2.9 L9.8 5.4 H14.2 Z M12 21.1 L9.8 18.6 H14.2 Z" fill="currentColor"/>'),
+  gas: svg('<path d="M12 4.5 L20.5 18 H3.5 Z" fill="currentColor"/>'),
+  back: svg('<path d="M12 19.5 L20.5 6 H3.5 Z" fill="currentColor"/>'),
   jump: svg(`<path d="M3.5 19 H8 M16 19 H20.5" ${LINE}/><path d="M6 15 Q12 1 18 15" ${LINE}/><path d="M18 15 L14.4 13.6 M18 15 L18.9 11.3" ${LINE}/>`),
   map: svg(`<path d="M3 6.5 L9 4 L15 6.5 L21 4 V17.5 L15 20 L9 17.5 L3 20 Z M9 4 V17.5 M15 6.5 V20" ${LINE}/>`),
   balloon: svg(`<circle cx="12" cy="9" r="6" fill="currentColor"/><path d="M8.2 13.6 L10.6 18.5 M15.8 13.6 L13.4 18.5" ${LINE} stroke-width="1.4"/><rect x="10" y="18.5" width="4" height="3" rx="0.6" fill="currentColor"/>`),
@@ -116,12 +118,11 @@ if (typeof addEventListener === 'function' && typeof document !== 'undefined') {
 
 const CSS = `
 #touchui { position: absolute; inset: 0; pointer-events: none; z-index: 1050;
-  --s: clamp(110px, 30vmin, 150px); --b: clamp(50px, 15vmin, 64px); --g: 12px; --e: 16px; --bot: 24px; }
-#touchui .zone, #touchui .tb { position: absolute; pointer-events: auto; touch-action: none;
+  --s: clamp(110px, 30vmin, 150px); --gas: clamp(64px, 19vmin, 92px); --back: calc(var(--gas) * 0.75);
+  --b: clamp(50px, 15vmin, 64px); --g: 12px; --e: 16px; --bot: 24px; }
+#touchui .zone, #touchui .tb, #touchui .pedals { position: absolute; pointer-events: auto; touch-action: none;
   -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
-#touchui .zone { bottom: 0; width: 40vw; }
-#touchui .zone.l { left: 0; }
-#touchui .zone.r { right: 0; }
+#touchui .zone { left: 0; bottom: 0; width: 40vw; }
 #touchui .base { position: absolute; width: var(--s); height: var(--s); margin: calc(var(--s) / -2) 0 0 calc(var(--s) / -2);
   box-sizing: border-box; border-radius: 50%; background: rgba(0, 0, 0, 0.42); pointer-events: none; color: rgba(255, 255, 255, 0.5);
   border: 2px solid rgba(255, 255, 255, 0.45); box-shadow: inset 0 0 0 calc(var(--s) * 0.07) rgba(255, 255, 255, 0.08), 0 0 10px rgba(0, 0, 0, 0.3); }
@@ -130,25 +131,37 @@ const CSS = `
   background: rgba(235, 238, 242, 0.7); border: 1px solid rgba(255, 255, 255, 0.8); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   transition: transform 0.12s ease-out; }
 #touchui .base.on .knob { transition: none; background: rgba(250, 251, 252, 0.85); }
+#touchui .pedals { right: var(--e); bottom: var(--bot); width: calc(var(--gas) + var(--g) + var(--back)); height: var(--gas); }
+#touchui .pb { position: absolute; bottom: 0; box-sizing: border-box; border-radius: 50%; color: rgba(255, 255, 255, 0.9);
+  background: rgba(0, 0, 0, 0.42); border: 2px solid rgba(255, 255, 255, 0.45); pointer-events: none;
+  box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.08), 0 0 10px rgba(0, 0, 0, 0.3); }
+#touchui .pb.gas { right: 0; width: var(--gas); height: var(--gas); padding: calc(var(--gas) * 0.24); }
+#touchui .pb.back { left: 0; width: var(--back); height: var(--back); padding: calc(var(--back) * 0.24); }
+#touchui .pb.on { background: rgba(255, 255, 255, 0.42); color: #fff; border-color: rgba(255, 255, 255, 0.85); }
 #touchui .tb { box-sizing: border-box; width: var(--b); height: var(--b); border-radius: 50%; padding: calc(var(--b) * 0.22);
   color: rgba(255, 255, 255, 0.88); background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.35); }
 #touchui .tb.on { background: rgba(255, 255, 255, 0.3); color: #fff; }
-#touchui .jump { right: calc(var(--e) + (var(--s) - var(--b)) / 2); bottom: calc(var(--bot) + var(--s) + var(--g)); }
-#touchui .map { right: calc(var(--e) + (var(--s) - var(--b)) / 2 + var(--b) + var(--g)); bottom: calc(var(--bot) + var(--s) + var(--g)); }
-#touchui .ride { right: calc(var(--e) + (var(--s) - var(--b)) / 2); bottom: calc(var(--bot) + var(--s) + 2 * var(--g) + var(--b)); display: none; }
+#touchui .jump { right: calc(var(--e) + (var(--gas) - var(--b)) / 2); bottom: calc(var(--bot) + var(--gas) + var(--g)); }
+#touchui .map { right: calc(var(--e) + (var(--gas) - var(--b)) / 2 + var(--b) + var(--g)); bottom: calc(var(--bot) + var(--gas) + var(--g)); }
+#touchui .ride { right: calc(var(--e) + (var(--gas) - var(--b)) / 2); bottom: calc(var(--bot) + var(--gas) + 2 * var(--g) + var(--b)); display: none; }
 #touchui .ride.show { display: block; }
 body.touch { -webkit-touch-callout: none; overscroll-behavior: none; }
 body.touch #c { touch-action: none; }
-body.touch #sbahnOff { z-index: 1060 !important; }   /* above the right stick's zone where they meet */
+body.touch #sbahnOff { z-index: 1060 !important; }   /* above the stick's zone where they meet */
 body.touch #mm { top: calc(var(--toprow, 42px) + 14px); bottom: auto; --mmd: 110px; }   /* round map + text column; +14 px for the N on the rim */
 `;
-// faint track on a base: arrowheads along the stick's one axis (viewBox 0..100)
-const TRACK = {
-  x: '<svg viewBox="0 0 100 100" aria-hidden="true"><path d="M8 50 L17 43 V57 Z M92 50 L83 43 V57 Z" fill="currentColor"/><path d="M22 50 H78" stroke="currentColor" stroke-width="1.5" opacity="0.5"/></svg>',
-  y: '<svg viewBox="0 0 100 100" aria-hidden="true"><path d="M50 8 L43 17 H57 Z M50 92 L43 83 H57 Z" fill="currentColor"/><path d="M50 22 V78" stroke="currentColor" stroke-width="1.5" opacity="0.5"/></svg>',
-};
+// faint hint on the base: arrowheads left / right (only the horizontal part steers)
+const TRACK = '<svg viewBox="0 0 100 100" aria-hidden="true"><path d="M8 50 L17 43 V57 Z M92 50 L83 43 V57 Z" fill="currentColor"/><path d="M22 50 H78" stroke="currentColor" stroke-width="1.5" opacity="0.5"/></svg>';
+// stick x (-1..1, knob offset / travel) -> steering fraction: dead zone, then a gentle curve
+export const STEER_DEAD = 0.08, STEER_POW = 1.6;
+export function steerCurve(x) {
+  const a = Math.abs(x);
+  if (a <= STEER_DEAD) return 0;
+  return Math.sign(x) * Math.min(1, (a - STEER_DEAD) / (1 - STEER_DEAD)) ** STEER_POW;
+}
 
-export function createTouch({ balloon = () => null, paused = () => false, onBlock = () => {}, parent = document.body } = {}) {
+export function createTouch({ balloon = () => null, paused = () => false, onBlock = () => {}, setSteer = () => {},
+                              parent = document.body } = {}) {
   // the rotate blocker pauses the game (index.html pause reason 'rotate'); now if already up
   blockSubs.push((b) => onBlock(b));
   if (blocked) onBlock(true);
@@ -165,9 +178,9 @@ export function createTouch({ balloon = () => null, paused = () => false, onBloc
     const root = document.createElement('div');
     root.id = 'touchui';
     root.innerHTML = `
-      <div class="zone l"></div><div class="zone r"></div>
-      <div class="base l">${TRACK.x}<div class="knob"></div></div>
-      <div class="base r">${TRACK.y}<div class="knob"></div></div>
+      <div class="zone"></div>
+      <div class="base">${TRACK}<div class="knob"></div></div>
+      <div class="pedals"><div class="pb back">${ICON.back}</div><div class="pb gas">${ICON.gas}</div></div>
       <div class="tb jump">${ICON.jump}</div>
       <div class="tb map">${ICON.map}</div>
       <div class="tb ride">${ICON.balloon}</div>`;
@@ -176,7 +189,7 @@ export function createTouch({ balloon = () => null, paused = () => false, onBloc
     // iOS Safari pinch zoom ignores user-scalable=no; its gesture events can be cancelled
     for (const t of ['gesturestart', 'gesturechange']) document.addEventListener(t, (e) => e.preventDefault(), { passive: false });
 
-    const CODE = { ' ': 'Space', ArrowLeft: 'ArrowLeft', ArrowRight: 'ArrowRight', ArrowUp: 'ArrowUp', ArrowDown: 'ArrowDown' };
+    const CODE = { ' ': 'Space', ArrowUp: 'ArrowUp', ArrowDown: 'ArrowDown' };
     const send = (type, key) => dispatchEvent(new KeyboardEvent(type, {
       key, code: CODE[key] || 'Key' + key.toUpperCase(), bubbles: true, cancelable: true }));
     const held = new Set();
@@ -185,62 +198,83 @@ export function createTouch({ balloon = () => null, paused = () => false, onBloc
       else if (!on && held.has(key)) { held.delete(key); send('keyup', key); }
     };
 
-    // ---------- the two sticks: same look, one axis each ----------
-    const ON = 0.25, OFF = 0.15;   // engage / release, fraction of the base's radius (the knob travels 0.55)
-    function stick(side, ax, neg, pos) {
-      const zone = root.querySelector('.zone.' + side), base = root.querySelector('.base.' + side), knob = base.querySelector('.knob');
-      let sp = null;   // { id, cx, cy } the finger on this stick
-      const size = () => base.offsetWidth || 130;
-      const rest = () => {   // resting centre (px from the viewport's left / top)
-        const r = size() / 2;
-        return { x: side === 'l' ? 16 + r : innerWidth - 16 - r, y: innerHeight - 24 - r };
-      };
-      const place = (x, y) => { base.style.left = x + 'px'; base.style.top = y + 'px'; };
-      function layout() {
-        // the zone: lower half; on the left also below the minimap (its round map takes taps)
-        let top = innerHeight / 2;
-        const m = side === 'l' && document.querySelector('#mm canvas');
-        if (m) { const r = m.getBoundingClientRect(); if (r.height) top = Math.max(top, r.bottom + 10); }
-        zone.style.top = Math.round(Math.min(top, innerHeight - size() - 30)) + 'px';
-        if (!sp) { const p = rest(); place(p.x, p.y); }
-      }
-      function move(e) {
-        const rad = size() / 2, travel = rad * 0.55;
-        const d = Math.max(-travel, Math.min(travel, ax === 'x' ? e.clientX - sp.cx : e.clientY - sp.cy));
-        knob.style.transform = ax === 'x' ? `translateX(${d.toFixed(1)}px)` : `translateY(${d.toFixed(1)}px)`;
-        const v = (ax === 'x' ? d : -d) / rad;   // y: up is positive (gas)
-        hold(pos, held.has(pos) ? v > OFF : v > ON);
-        hold(neg, held.has(neg) ? v < -OFF : v < -ON);
-      }
-      function up() {
-        hold(neg, false); hold(pos, false);
-        if (sp) { try { zone.releasePointerCapture(sp.id); } catch { /* gone */ } }
-        sp = null;
-        base.classList.remove('on');
-        knob.style.transform = '';
-        const p = rest(); place(p.x, p.y);
-      }
-      zone.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        if (sp || paused() || blocked) return;
-        const r = size() / 2, p = rest(), x = e.clientX, y = e.clientY;
-        // on the resting base: it stays (the press itself counts); elsewhere it comes under the thumb
-        const onBase = Math.hypot(x - p.x, y - p.y) <= r;
-        const cx = onBase ? p.x : Math.min(Math.max(x, r + 4), innerWidth - r - 4);
-        const cy = onBase ? p.y : Math.min(Math.max(y, r + 4), innerHeight - r - 22);   // clear of the credit line
-        sp = { id: e.pointerId, cx, cy };
-        try { zone.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
-        place(cx, cy);
-        base.classList.add('on');
-        move(e);
-      });
-      zone.addEventListener('pointermove', (e) => { if (sp && e.pointerId === sp.id) move(e); });
-      for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) {
-        zone.addEventListener(t, (e) => { if (sp && e.pointerId === sp.id) up(); });
-      }
-      return { up, layout, get busy() { return !!sp; } };
+    // ---------- left stick: analog steering (setSteer), knob free in every direction ----------
+    const zone = root.querySelector('.zone'), base = root.querySelector('.base'), knob = base.querySelector('.knob');
+    let sp = null, steer = 0;   // sp: { id, cx, cy } the finger on the stick
+    const size = () => base.offsetWidth || 130;
+    const rest = () => { const r = size() / 2; return { x: 16 + r, y: innerHeight - 24 - r }; };
+    const place = (x, y) => { base.style.left = x + 'px'; base.style.top = y + 'px'; };
+    const putSteer = (v) => { if (v !== steer) { steer = v; setSteer(v); } };
+    function layoutStick() {
+      // the zone: lower half of the left 40 %, below the minimap (its round map takes taps)
+      let top = innerHeight / 2;
+      const m = document.querySelector('#mm canvas');
+      if (m) { const r = m.getBoundingClientRect(); if (r.height) top = Math.max(top, r.bottom + 10); }
+      zone.style.top = Math.round(Math.min(top, innerHeight - size() - 30)) + 'px';
+      if (!sp) { const p = rest(); place(p.x, p.y); }
     }
-    const sticks = [stick('l', 'x', 'ArrowLeft', 'ArrowRight'), stick('r', 'y', 'ArrowDown', 'ArrowUp')];
+    function move(e) {
+      const travel = size() / 2 * 0.55;   // base radius minus the knob's: the knob reaches the rim
+      let dx = e.clientX - sp.cx, dy = e.clientY - sp.cy;
+      const l = Math.hypot(dx, dy);
+      if (l > travel) { dx *= travel / l; dy *= travel / l; }
+      knob.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`;
+      putSteer(steerCurve(dx / travel));   // the vertical part is deliberately unused
+    }
+    function stickUp() {
+      putSteer(0);
+      if (sp) { try { zone.releasePointerCapture(sp.id); } catch { /* gone */ } }
+      sp = null;
+      base.classList.remove('on');
+      knob.style.transform = '';
+      const p = rest(); place(p.x, p.y);
+    }
+    zone.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (sp || paused() || blocked) return;
+      const r = size() / 2, p = rest(), x = e.clientX, y = e.clientY;
+      // on the resting base: it stays (the press itself counts); elsewhere it comes under the thumb
+      const onBase = Math.hypot(x - p.x, y - p.y) <= r;
+      const cx = onBase ? p.x : Math.min(Math.max(x, r + 4), innerWidth - r - 4);
+      const cy = onBase ? p.y : Math.min(Math.max(y, r + 4), innerHeight - r - 22);   // clear of the credit line
+      sp = { id: e.pointerId, cx, cy };
+      try { zone.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
+      place(cx, cy);
+      base.classList.add('on');
+      move(e);
+    });
+    zone.addEventListener('pointermove', (e) => { if (sp && e.pointerId === sp.id) move(e); });
+    for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+      zone.addEventListener(t, (e) => { if (sp && e.pointerId === sp.id) stickUp(); });
+    }
+
+    // ---------- right: gas + back buttons (digital, key path); a thumb may slide between them ----------
+    const pedals = root.querySelector('.pedals');
+    const PB = [[root.querySelector('.pb.gas'), 'ArrowUp'], [root.querySelector('.pb.back'), 'ArrowDown']];
+    const ptr = new Map();   // pointerId -> key | null
+    function pick(e) {   // the button under (or nearest to) the finger, within 1.25 of its radius
+      let best = null, bd = Infinity;
+      for (const [el, key] of PB) {
+        const r = el.getBoundingClientRect(), d = Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2)) / (r.width / 2);
+        if (d < 1.25 && d < bd) { bd = d; best = key; }
+      }
+      return best;
+    }
+    function pedalSync() {
+      const now = new Set(ptr.values());
+      for (const [el, key] of PB) { hold(key, now.has(key)); el.classList.toggle('on', now.has(key)); }
+    }
+    pedals.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (paused() || blocked) return;
+      try { pedals.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
+      ptr.set(e.pointerId, pick(e)); pedalSync();
+    });
+    pedals.addEventListener('pointermove', (e) => { if (ptr.has(e.pointerId)) { ptr.set(e.pointerId, pick(e)); pedalSync(); } });
+    for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+      pedals.addEventListener(t, (e) => { if (ptr.delete(e.pointerId)) pedalSync(); });
+    }
+    const pedalsUp = () => { ptr.clear(); pedalSync(); };
 
     // ---------- one-shot buttons: keydown + keyup, as a key tap ----------
     function tap(el, key) {
@@ -258,17 +292,16 @@ export function createTouch({ balloon = () => null, paused = () => false, onBloc
     tap(ride, 'e');
 
     // everything up (the game drops its keys on blur / pause as well; keyup keeps both in step)
-    const releaseAll = () => { for (const s of sticks) s.up(); held.clear(); };
-    const layout = () => { for (const s of sticks) s.layout(); };
+    const releaseAll = () => { stickUp(); pedalsUp(); held.clear(); };
     addEventListener('blur', releaseAll);
     document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAll(); });
     addEventListener('pagehide', releaseAll);
     blockSubs.push((b) => { if (b) releaseAll(); });
-    addEventListener('resize', () => { releaseAll(); layout(); });
-    layout();
+    addEventListener('resize', () => { releaseAll(); layoutStick(); });
+    layoutStick();
 
-    // a pause (menu, map, loading, rotate) lets go of both sticks; the balloon button only while
-    // the car stands at the platform and no ride is running; the left zone follows the minimap
+    // a pause (menu, map, loading, rotate) lets go of everything; the balloon button only while
+    // the car stands at the platform and no ride is running; the stick zone follows the minimap
     let wasPaused = false;
     setInterval(() => {
       const p = !!paused() || blocked;
@@ -277,7 +310,7 @@ export function createTouch({ balloon = () => null, paused = () => false, onBloc
       let b = null;
       try { b = balloon(); } catch { /* not created yet */ }
       ride.classList.toggle('show', !!(b && b.near && !b.riding));
-      for (const s of sticks) if (!s.busy) s.layout();
+      if (!sp) layoutStick();
     }, 200);
   }
   return { get active() { return built; } };

@@ -84,7 +84,7 @@ const HTML = `
     <span class="tk k"><span class="kc s">Leertaste</span> springen</span>
     <span class="tk k"><span class="kc s">Esc</span> Menü</span>
     <span class="tk t"><span class="ti">${ICON.steer}</span> links: lenken</span>
-    <span class="tk t"><span class="ti">${ICON.pedal}</span> rechts: Gas, Bremse / rückwärts</span>
+    <span class="tk t"><span class="ti">${ICON.gas}</span><span class="ti">${ICON.back}</span> rechts: Gas und Bremse / rückwärts</span>
     <span class="tk t"><span class="ti">${ICON.jump}</span> springen</span>
     <span class="tk t"><span class="ti">${MENU_ICON}</span> Menü</span>
   </div>

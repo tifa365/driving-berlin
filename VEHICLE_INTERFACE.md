@@ -59,8 +59,9 @@ Right after construction, `spawn()` writes `maxSpeed` and then `speedLimit` / `r
 ### 3.2 Per-step calls (index.html `stepOnce()`, lines 1300–1352), in this order
 
 1. `setSteeringLever(l)` (1303). `l` is −1, 0 or +1: ArrowRight − ArrowLeft. Both keys held gives 0. During a rescue or scripted sequence (`sinking`) the game sends 0.
+   **Or**, while the touch stick is off centre (index.html `analog.steer` ≠ 0), `setSteeringTarget(f)` instead (opt-in analog steering, 2026-11-22): `f` in −1..1 is the target wheel angle as a fraction of the speed-dependent lock, reached at the normal steering rate; 0 self-centres like a released key. `setSteeringTarget(±1 | 0)` behaves exactly like `setSteeringLever` of the same value; with the keyboard only `setSteeringLever` is called (bench unchanged).
 2. `setThrottle(t)` (1304). `t` is 0 or 1 (ArrowUp, or `?autodrive=` seconds at start). The vehicle clamps it to 0..1.
-3. `setBrake(b)` (1305). `b` is 0 or 1 (ArrowDown). Clamped to 0..1. Touch pads send the same key events (js/touch.js), so input is always digital and both pedals can be held together.
+3. `setBrake(b)` (1305). `b` is 0 or 1 (ArrowDown). Clamped to 0..1. The touch gas / back buttons send the same key events (js/touch.js), so throttle and brake are digital and both pedals can be held together. The model already honours fractions of both (engine force and brake force scale with them; the standstill reverse rule only needs `b > 0`).
 4. The game logic may now change the bodies directly: the jump (`jumpStep`), the water/pit/no-drive/S-Bahn/roof triggers, and per-wheel grip on ice (§3.4).
 5. `vehicle.noHold = !!sinking || edge.turning` (1326).
 6. **`update(1/60)`** (1327). Applies the inputs. Must not call `world.Step`.
@@ -92,6 +93,7 @@ The browser runs as many of these steps per frame as real time needs (at most 0.
 | Method | Called at | Contract |
 |---|---|---|
 | `setSteeringLever(l)` | index.html:1303 | See §3.2. |
+| `setSteeringTarget(f)` | index.html `stepOnce()` (touch stick) | Opt-in analog steering, see §3.2. Sets `steering.lever` to `f` clamped to −1..1 (fractional), so `steering.lever` may be fractional while it is used. |
 | `setThrottle(t)` / `setBrake(b)` | index.html:1304–1305 | See §3.2. |
 | `update(dt)` | index.html:1327 | See §3.2. Also refreshes `speedKmh`. |
 | `lateUpdate(dt)` | index.html:1337 | See §3.2. Sets `wallContact`, `impactPitch`, `impactA`, `impactT`. |
@@ -125,7 +127,7 @@ The browser runs as many of these steps per frame as real time needs (at most 0.
 | `squealLevel` | js/dust.js:313, 317 | 0..1 | Tyre squeal or slide strength, used for turn dust. Full lock at 50 km/h peaks at 0.5 for both car and bus. |
 | `gear` | js/dust.js:182 | +1 forward, −1 reverse | The direction the drivetrain is engaged. Dust uses its sign when the vehicle is nearly stopped. |
 | `wallContact` | index.html:1243 (`enclosed()`); js/dust.js:301 | object or `null`; only truthiness is read | Non-null on **every** step after which any own fixture touches a static, non-sensor fixture, including while resting against it. Null otherwise. The current object is `{nx, ny, impact, trunk}` (normal from wall to car, impact speed in m/s), but nobody outside reads the fields. |
-| `steering.lever` | js/edge.js:168 (optional chaining) | −1, 0, +1 | The current lever. It picks the swing direction of a 180° turn-around (left if steering left). Missing is tolerated (treated as 0). |
+| `steering.lever` | js/edge.js:168 (optional chaining) | −1, 0, +1 (fractional −1..1 while `setSteeringTarget` is used) | The current lever. It picks the swing direction of a 180° turn-around (left if steering left). Missing is tolerated (treated as 0). |
 | `body` | everywhere (below) | b2Body, dynamic | The main body (chassis). |
 | `wheels` | index.html:868, 925, 1127, 1325; js/edge.js:133; js/sbahn.js:257, 310, 486, 558; js/roofs.js:133, 193; js/tunnels.js:149, 196; js/dust.js:166 | array of **exactly 4** objects `{ body, grip }` | Order **0 FL, 1 FR, 2 RL, 3 RR**. Indices 2 and 3 are the rear pair: ice gives the rear wheels less grip, and dust puffs from the rear wheels. `wheels[i].body` must be a Box2D body at that tyre. Dust places particles at its `GetWorldCenter()`, and the game uses it for the ice lookup. |
 

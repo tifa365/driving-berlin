@@ -103,7 +103,7 @@ test API). The modules:
 | `js/loading.js` | Loading screen (the way into the game) | `intro`, `loading` |
 | `js/menu.js` | Esc menu: pages, slow motion into the pause | `menu`, `paused` |
 | `js/intro.js` | Shared help texts: key list, ways to play, `DATASETS` / `SOFTWARE` credits | — |
-| `js/touch.js` | Touch controls; they dispatch the same key events as the keyboard | — |
+| `js/touch.js` | Touch controls: left stick steers analog (`analog.steer` → `vehicle.setSteeringTarget`, horizontal part only), gas / back buttons and jump / map / balloon dispatch the same key events as the keyboard; portrait blocker (pause reason `rotate`) | — |
 | `js/site.js` | Optional `site.json` of the published copy: tile URL, gzipped `.bin` | — |
 
 Other useful API members: `state()`, `steps(n, keys)`, `simulate(s, keys)`, `teleport(x, z, h)`,

@@ -231,6 +231,10 @@ export class Vehicle {
 
   // ----- inputs -----
   setSteeringLever(l) { this.steering.lever = l > 0 ? 1 : l < 0 ? -1 : 0; }
+  // opt-in analog steering (touch stick, gamepad): f in -1..1 = the TARGET wheel angle as a
+  // fraction of the speed-dependent lock, reached at the normal steering rate; 0 = self-centring
+  // as with a released key. setSteeringLever(-1 | 0 | 1) is the same as setSteeringTarget of it.
+  setSteeringTarget(f) { f = +f || 0; this.steering.lever = Math.min(1, Math.max(-1, f)); }
   setThrottle(t) { this.throttle = Math.min(1, Math.max(0, +t || 0)); }
   setBrake(b) { this.brake = Math.min(1, Math.max(0, +b || 0)); }
 
