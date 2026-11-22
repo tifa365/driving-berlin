@@ -32,6 +32,8 @@ The game's texts are in German.
 Phones and tablets get experimental touch controls: an on-screen stick and buttons. Hold the
 phone sideways.
 
+Game controllers work: left stick steers, triggers are gas and brake, A jumps, Start opens the menu.
+
 Settings (mood, vehicle, top speed, detail, camera view and height) live in the menu and are
 remembered between visits. "Neustart" in the menu starts the hunt over; "Auf Standard
 zurücksetzen" in the settings restores the defaults.

@@ -1,7 +1,7 @@
 // Shared help texts (2026-11-21: the start screen is gone; the game opens through the loading
 // screen js/loading.js, everything else lives in the Esc menu js/menu.js):
 //   HELP_CSS        styles for the pieces below (scoped to .bdhelp)
-//   controlsHtml()  the key list and the touch layout (menu page "Steuerung"); the wrapper
+//   controlsHtml()  the key list, the touch layout and the controller list (menu page "Steuerung"); the wrapper
 //                   gets class "touch" on touch devices (js/touch.js onTouch) to swap them
 //   modesHtml()     the two ways to play (menu page "Info")
 //   DATASETS, SOFTWARE  every dataset / library the game is built from (one list; README in step)
@@ -42,6 +42,14 @@ export const HELP_CSS = `
 .bdhelp .tpad > span.r { width: 40px; border-radius: 50%; padding: 8px; }
 .bdhelp .tpad > span.st { padding: 3px; border-color: transparent; background: none; }   /* the stick symbol draws its own ring */
 .bdhelp .tctl .what { font-size: 14px; line-height: 1.35; }
+.bdhelp .padh { margin: 18px 0 8px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #9a9da3; font-weight: 600; }
+.bdhelp ul.pctl { list-style: none; margin: 0; padding: 0; font-size: 14px; line-height: 1.25; color: #ccc;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 14px; }
+.bdhelp ul.pctl li { display: flex; align-items: center; gap: 10px; }
+.bdhelp .pg { flex: none; display: inline-flex; width: 26px; height: 26px; color: #fff; align-items: center; justify-content: center; }
+.bdhelp .pg .fb { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
+  border-radius: 50%; border: 1.5px solid #bbb; font: 600 12px system-ui, sans-serif; font-style: normal; color: #fff; }
+.bdhelp .pg .fb.sm { padding: 4px; }
 .bdhelp .modes { display: grid; gap: 10px; }
 .bdhelp .mode { padding: 10px 14px; background: rgba(255, 255, 255, 0.06); border: 1px solid #444; border-radius: 8px;
   font-size: 14px; line-height: 1.4; }
@@ -95,8 +103,27 @@ export function controlsHtml() {
     <div class="what"><b>Karte</b><br><small>auch: die kleine Karte oben links antippen</small></div>
     <div class="tpad"><span class="r">${MENU_ICON}</span></div>
     <div class="what"><b>Menü</b><br><small>oben rechts; das Spiel hält an</small></div>
-  </div>`;
+  </div>
+  <h3 class="padh">Controller</h3>
+  <ul class="pctl">
+    <li><span class="pg">${PAD_GLYPH.stick}</span><span>Linker Stick: lenken</span></li>
+    <li><span class="pg">${PAD_GLYPH.rt}</span><span>Rechter Trigger: Gas</span></li>
+    <li><span class="pg">${PAD_GLYPH.lt}</span><span>Linker Trigger: Bremse / rückwärts</span></li>
+    <li><span class="pg"><i class="fb">A</i></span><span>A: springen</span></li>
+    <li><span class="pg"><i class="fb">B</i></span><span>B: umdrehen</span></li>
+    <li><span class="pg"><i class="fb">X</i></span><span>X: runter von den Gleisen</span></li>
+    <li><span class="pg"><i class="fb">Y</i></span><span>Y: Ansicht</span></li>
+    <li><span class="pg"><i class="fb sm">${MENU_ICON}</i></span><span>Start: Menü</span></li>
+    <li><span class="pg"><i class="fb sm">${PAD_GLYPH.back}</i></span><span>Back: Karte</span></li>
+  </ul>`;
 }
+// simple controller glyphs (no brand shapes): stick = ring + knob, trigger = a rounded tab, back = two squares
+const PAD_GLYPH = {
+  stick: '<svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="5" fill="currentColor"/></svg>',
+  rt: '<svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true"><path d="M6 20 V9 Q6 4 12 4 H15 Q19 4 19 9 V20 Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.5 15 L12.5 9.5 L15.5 15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  lt: '<svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true"><path d="M18 20 V9 Q18 4 12 4 H9 Q5 4 5 9 V20 Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8.5 9.5 L11.5 15 L14.5 9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  back: '<svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true"><rect x="4" y="4" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="9" y="9" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
+};
 
 export function modesHtml(bears = 0) {
   return `

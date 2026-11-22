@@ -25,9 +25,12 @@ export function driveNames() {
   for (const e of read('sbahn.json')?.entrances || []) n.push('drive.sbahn.' + e.id.replace(/^sbahn-/, ''));
   for (const h of D.roof.headings) n.push(`drive.roof-fall.h${h.toFixed(2)}`);
   for (const b of D.border) n.push('drive.border.' + b.name);
-  n.push('drive.memorial', 'drive.coast-down', 'drive.map-drive', 'settings.new-game', 'settings.reset-settings', 'settings.after-reload', 'drive.no-errors');
+  n.push('drive.memorial', 'drive.coast-down', 'drive.map-drive', ...PAD_NAMES, 'settings.new-game', 'settings.reset-settings', 'settings.after-reload', 'drive.no-errors');
   return n;
 }
+
+// game controller cases (js/gamepad.js with a fake standard pad through berlinDrive.gamepad.inject)
+const PAD_NAMES = ['pad.steer', 'pad.triggers', 'pad.jump', 'pad.menu', 'pad.resting'];
 
 // ---------- in-page helpers (installed once per page as window.__bdt) ----------
 function pageHelpers() {
@@ -102,6 +105,75 @@ function pageHelpers() {
       const r = { before, at, kind, on: !!el?.classList.contains('on'), text: el?.textContent ?? null };
       for (let i = 0; i < 60 && B.state().sinking; i++) step(0.5);
       away(); return r;
+    },
+    // a fake "standard" pad (Gamepad API shape) the game polls instead of navigator.getGamepads()
+    pad: {
+      p: null,
+      on() {
+        const btn = () => ({ pressed: false, value: 0 });
+        this.p = { id: 'Fake standard pad (test)', index: 0, connected: true, mapping: 'standard', timestamp: 0,
+                   axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, btn) };
+        B.gamepad.inject(() => [this.p]);
+      },
+      off() { this.set({}); B.gamepad.poll(performance.now()); B.gamepad.inject(null); this.p = null; },
+      // set({ axes: [lx, ly, rx, ry], b: { 7: 0.4, 0: 1 } }) then one poll
+      set({ axes = [0, 0, 0, 0], b = {} } = {}) {
+        this.p.axes = axes.slice();
+        this.p.buttons.forEach((x, i) => { const v = b[i] ?? 0; x.value = v; x.pressed = v > 0.5; });
+        this.p.timestamp++;
+        B.gamepad.poll(performance.now());
+      },
+      // three stick positions at the same speed: steady wheel angle + yaw rate each
+      steer(xs) {
+        const out = [];
+        for (const x of xs) {
+          away(); this.set({});
+          let n = 0; while (B.state().kmh < 25 && n < 600) { step(1 / 60, ['ArrowUp']); n++; }
+          this.set({ axes: [x, 0, 0, 0] });
+          step(1.5, ['ArrowUp']);
+          const v = B.vehicle;
+          out.push({ x, kmh: B.state().kmh, angDeg: v.steering.angle * 180 / Math.PI, yawDegS: v.body.GetAngularVelocity() * 180 / Math.PI, steer: B.gamepad.state().steer });
+          this.set({});
+        }
+        away(); return out;
+      },
+      triggers() {
+        const run = (rt) => { away(); this.set({ b: { 7: rt } }); step(1.5); const k = B.state().kmh; this.set({}); return k; };
+        const k40 = run(0.4), k100 = run(1);
+        away(); this.set({ b: { 7: 1 } }); step(2); const fwd = B.state().kmh, p0 = B.state();
+        this.set({ b: { 6: 1 } });
+        let stopT = null; for (let t = 0; t < 6 && stopT === null; t += 0.1) { step(0.1); if (B.state().kmh < 0.5) stopT = t + 0.1; }
+        const p1 = B.state(); step(3); const p2 = B.state(), h = B.vehicle.getHeading();
+        const back = -((p2.x - p1.x) * Math.sin(h) - (p2.z - p1.z) * Math.cos(h));   // metres driven backwards
+        const r = { k40, k100, fwd, stopT, gear: B.vehicle.gear, revKmh: B.state().kmh, back };
+        this.set({}); away(); return r;
+      },
+      jump() {
+        away(); this.set({}); step(0.5);
+        let maxY = 0;
+        this.set({ b: { 0: 1 } }); this.set({});
+        for (let i = 0; i < 40; i++) { step(1 / 60); maxY = Math.max(maxY, B.jumpState?.y ?? 0); }   // hop height above the road
+        step(2); away(); return { rise: maxY };
+      },
+      async menu() {
+        away(); this.set({});
+        this.set({ b: { 9: 1 } }); this.set({});
+        const open = !!B.menu?.isOpen;
+        await new Promise((r) => setTimeout(r, 700));   // the slow-motion opening
+        const f0 = document.activeElement?.dataset?.act ?? document.activeElement?.textContent;
+        this.set({ b: { 13: 1 } }); this.set({});
+        const f1 = document.activeElement?.dataset?.act ?? document.activeElement?.textContent;
+        this.set({ b: { 1: 1 } }); this.set({});
+        await new Promise((r) => setTimeout(r, 400));
+        return { open, f0, f1, closed: !B.menu?.isOpen, paused: B.paused };
+      },
+      resting() {
+        away(); this.set({ b: { 4: 1 } }); this.set({});   // a bumper press picks the pad (no function in the game)
+        this.set({ axes: [0.06, -0.05, 0.04, 0.03] });     // resting noise inside the dead zone
+        step(1, ['ArrowRight', 'ArrowUp']);
+        const r = { angDeg: B.vehicle.steering.angle * 180 / Math.PI, kmh: B.state().kmh, connected: B.gamepad.connected, steer: B.gamepad.state().steer };
+        away(); return r;
+      },
     },
     coast(fromKmh) {
       const s = B.level.spawn; away(); B.teleport(s.x, s.z, s.heading); step(0.15);
@@ -245,6 +317,47 @@ async function mapDrive(b) {
   return row('drive.map-drive', !bad.length, `moved ${f1(moved)} m, ${jump.toFixed(3)} m on close`, 'opens, drives, 0 m on close', bad.join('; ') + (bad.length ? '.' : ''));
 }
 
+// ---------- game controller: a fake standard pad drives the real input path (js/gamepad.js) ----------
+async function padTests(b, only) {
+  const rows = [], add = async (name, fn) => { if (selected(name, only)) rows.push(...await timed(name, fn)); };
+  await b.ev('__bdt.pad.on(), true');
+  try {
+    await add('pad.steer', async () => {
+      const r = await b.ev('__bdt.pad.steer([0.4, 0.7, 1.0])');
+      const a = r.map((x) => x.angDeg), ok = a[0] > 0.3 && a[1] > a[0] * 1.5 && a[2] > a[1] * 1.3;
+      return row('pad.steer', ok, r.map((x) => `${x.x}: ${x.angDeg.toFixed(1)}°`).join(', '), 'grows clearly with the stick',
+        ok ? '' : `Left stick x 0.4 / 0.7 / 1.0 at ~${f1(r[0].kmh)} km/h gave wheel angles ${a.map((v) => v.toFixed(2)).join(' / ')}°; expected small / medium / full.`);
+    });
+    await add('pad.triggers', async () => {
+      const r = await b.ev('__bdt.pad.triggers()');
+      const bad = [];
+      if (!(r.k40 > 0.5 && r.k100 > r.k40 * 1.3)) bad.push(`gas 40 % / 100 % gave ${f1(r.k40)} / ${f1(r.k100)} km/h after 1.5 s (full must be clearly faster)`);
+      if (r.stopT === null) bad.push('the left trigger did not stop the car within 6 s');
+      if (!(r.gear < 0 && r.back > 1)) bad.push(`holding the left trigger at a standstill did not reverse (gear ${r.gear}, ${f1(r.back)} m backwards)`);
+      return row('pad.triggers', !bad.length, `40 %: ${f1(r.k40)}, 100 %: ${f1(r.k100)} km/h; stop ${r.stopT?.toFixed(1) ?? '-'} s, reverse ${f1(r.back)} m`,
+        'gas proportional, brake stops, then reverses', bad.join('; ') + (bad.length ? '.' : ''));
+    });
+    await add('pad.jump', async () => {
+      const r = await b.ev('__bdt.pad.jump()'), ok = r.rise > 0.15;
+      return row('pad.jump', ok, `rose ${r.rise.toFixed(2)} m`, '> 0.15 m', ok ? '' : 'A (button 0) did not make the car jump.');
+    });
+    await add('pad.menu', async () => {
+      const r = await b.ev('__bdt.pad.menu()');
+      const bad = [];
+      if (!r.open) bad.push('Start did not open the menu');
+      if (r.f0 === r.f1) bad.push(`d-pad down did not move the menu focus (stayed on ${r.f0})`);
+      if (!r.closed) bad.push('B did not close the menu');
+      return row('pad.menu', !bad.length, `open ${r.open ? 'yes' : 'no'}, focus ${r.f0} -> ${r.f1}, closed ${r.closed ? 'yes' : 'no'}`, 'Start opens, d-pad moves, B closes', bad.join('; ') + (bad.length ? '.' : ''));
+    });
+    await add('pad.resting', async () => {
+      const r = await b.ev('__bdt.pad.resting()'), ok = r.connected && r.angDeg > 5 && r.kmh > 3;
+      return row('pad.resting', ok, `keys steer ${r.angDeg.toFixed(1)}°, ${f1(r.kmh)} km/h`, 'keyboard works beside a resting pad',
+        ok ? '' : `With a connected pad resting (stick noise inside the dead zone) the arrow keys gave ${r.angDeg.toFixed(1)}° and ${f1(r.kmh)} km/h${r.connected ? '' : ' (the pad was not picked up)'}.`);
+    });
+  } finally { await b.ev('__bdt.pad.off(), true'); }
+  return rows;
+}
+
 export async function runDrive(b, opts) {
   const only = opts.only || [], rows = [], add = async (name, fn) => { if (selected(name, only)) rows.push(...await timed(name, fn)); };
   const errs0 = b.errors.length;
@@ -317,6 +430,7 @@ export async function runDrive(b, opts) {
   });
 
   await add('drive.map-drive', () => mapDrive(b));
+  if (PAD_NAMES.some((n) => selected(n, only))) rows.push(...await padTests(b, only));
   rows.push(...await storageTests(b, opts));   // last: these reload the page
 
   if (selected('drive.no-errors', only)) {

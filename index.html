@@ -84,7 +84,8 @@ import { createBridges } from './js/bridges.js';   // bridges over water: drivab
 import { loadRoofs, createRoofs } from './js/roofs.js';   // easter egg: roof mode (Bundestag roof + Spree skywalk), bear lift on Paul-Loebe-Allee
 import { createLoading } from './js/loading.js';   // loading screen: the way into the game (blurred view sharpens with the progress)
 import { createMenu } from './js/menu.js';   // Esc menu (pause, settings, controls, bears, map); touch: round button top right
-import { createTouch, isCoarse } from './js/touch.js';   // touch sticks on phones / tablets, feed the same key events
+import { createTouch, isCoarse, isBlocked as rotateBlocked } from './js/touch.js';
+import { createGamepad } from './js/gamepad.js';   // game controllers: left stick, triggers, buttons (polled in frame())   // touch sticks on phones / tablets, feed the same key events
 import { site, fetchBin } from './js/site.js';   // optional site.json (published copy): tile URL, gzipped .bin files
 
 const params = new URLSearchParams(location.search);
@@ -1152,9 +1153,10 @@ $('collide').addEventListener('click', (e) => { setCollision(!collision); e.curr
 
 // ---------- input (stickX steers, stickY > 0 throttle, < 0 brake) ----------
 const keys = new Set();
-// analog steering next to the keys (touch stick js/touch.js): steer -1..1 = target wheel angle as a
-// fraction of the lock (vehicle.setSteeringTarget). 0 = not in use: the keys steer exactly as before.
-const analog = { steer: 0 };
+// analog input next to the keys (touch stick js/touch.js, game controller js/gamepad.js):
+// steer -1..1 = target wheel angle as a fraction of the lock (vehicle.setSteeringTarget);
+// gas / brake 0..1 = pedal fractions (triggers). 0 = not in use: the keys work exactly as before.
+const analog = { steer: 0, gas: 0, brake: 0 };
 // W A S D drive like the arrow keys (owner 2026-11-21): they enter the set under the arrow names
 const WASD = { w: 'ArrowUp', a: 'ArrowLeft', s: 'ArrowDown', d: 'ArrowRight' };
 const driveKey = (e) => (!e.ctrlKey && !e.metaKey && !e.altKey && WASD[e.key.toLowerCase()]) || e.key;
@@ -1246,6 +1248,11 @@ addEventListener('blur', () => keys.clear());
 // Inert while paused; a phone held upright pauses the game (reason 'rotate') under its blocker.
 createTouch({ balloon: () => balloon, paused: () => pauseBy.size > 0, onBlock: (on) => setPause('rotate', on),
              setSteer: (v) => { analog.steer = v; } });
+// game controllers (js/gamepad.js): polled at the top of frame(); drives through `analog`, every
+// other button sends the keyboard's key events. menu / minimap / balloon are read later (getters).
+const padKey = (k) => { for (const t of ['keydown', 'keyup']) dispatchEvent(new KeyboardEvent(t, { key: k, code: k === ' ' ? 'Space' : k.length === 1 ? 'Key' + k.toUpperCase() : k, bubbles: true, cancelable: true })); };
+const gamepad = createGamepad({ analog, key: padKey, blocked: () => loading.open || rotateBlocked(), paused: () => pauseBy.size > 0,
+  menu: () => menu, minimap: () => minimap, mapDriving: () => !!mapDrive, toggleView: () => setView(view === 'horizon' ? 'standard' : 'horizon') });
 
 // ---------- water / pit: drive in -> sink or fall -> the Rescue Bear fishes the car out ----------
 // A pose is recorded every 0.5 s while on land; the car is put back on the
@@ -1650,7 +1657,7 @@ if (hasClutter) import('./js/clutter.js').then((m) => m.createClutter({ base, wo
 function setPause(why, on) {
   const was = pauseBy.size > 0;
   if (on) pauseBy.add(why); else pauseBy.delete(why);
-  keys.clear(); analog.steer = 0;   // nothing held carries over (no accelerating after resume)
+  keys.clear(); analog.steer = 0; analog.gas = 0; analog.brake = 0;   // nothing held carries over (no accelerating after resume)
   if (was && !pauseBy.size) { last = performance.now(); acc = 0; }   // frame clock restarts: no big dt
 }
 // ---------- easter egg: driving on the map screen (hidden, no hint) ----------
@@ -1715,6 +1722,7 @@ let simTime = 0, acc = 0, last = performance.now();
 let heldPose = null;   // drawn pose of the parked car (stepOnce)
 let firstFrameSeen = false, loadEnter = -1;   // loadEnter: stream.events.enter seen by the loading-screen frame
 function frame(now) {
+  gamepad.poll(now);   // also while paused: the menu and the map are worked with the pad
   if (isFrozen()) {   // menu / map: the picture stays, nothing moves; a resize redraws it once
     last = now;
     if (pausedRedraw) {   // resize, or a setting changed (paint, vehicle, camera sliders): same moment, new look
@@ -1765,8 +1773,11 @@ function stepOnce(keys) {
     const drive = !sinking;
     if (analog.steer) vehicle.setSteeringTarget(drive ? analog.steer : 0);   // touch stick: partial angles
     else vehicle.setSteeringLever(drive ? (keys.has('ArrowRight') ? 1 : 0) - (keys.has('ArrowLeft') ? 1 : 0) : 0);
-    vehicle.setThrottle(drive && (keys.has('ArrowUp') || simTime < AUTODRIVE) ? 1 : 0);
-    vehicle.setBrake(drive && keys.has('ArrowDown') ? 1 : 0);
+    if (analog.gas || analog.brake) { vehicle.setThrottle(drive ? analog.gas : 0); vehicle.setBrake(drive ? analog.brake : 0); }   // controller triggers: fractions
+    else {
+      vehicle.setThrottle(drive && (keys.has('ArrowUp') || simTime < AUTODRIVE) ? 1 : 0);
+      vehicle.setBrake(drive && keys.has('ArrowDown') ? 1 : 0);
+    }
     simTime += STEP;
     jumpStep(STEP);
     {
@@ -1945,6 +1956,7 @@ window.berlinDrive = {
   get intro() { return loading; },   // loading screen (js/loading.js; was the start screen): open, named, progress; hide() / show() do nothing
   resetSettings,   // every setting to its default (progress kept), reload at the same spot
   newGame,   // Neustart without the menu's question: progress (bears, balloon cut, saved position) cleared, reload
+  get gamepad() { return gamepad; },   // js/gamepad.js: connected, id, state(), inject(getPads) for tests, poll(now)
   get loading() { return loading; }, get menu() { return menu; }, get paused() { return pauseBy.size > 0; }, get mapDrive() { return !!mapDrive; },   // Esc menu (js/menu.js): open(page), close()
   get eggs() { return eggs; },   // football + bear hunt (js/eggs.js): items(), found(), reset(), ball, goals, placeBall(x, z, vx, vz)
   get skid() { return skid; },   // skid marks (js/skid.js): opts (live), setEnabled(bool) (saved as berlinDrive.skid), clear(), enabled, laid

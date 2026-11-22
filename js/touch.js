@@ -154,10 +154,10 @@ body.touch #mm { top: calc(var(--toprow, 42px) + 14px); bottom: auto; --mmd: 110
 const TRACK = '<svg viewBox="0 0 100 100" aria-hidden="true"><path d="M8 50 L17 43 V57 Z M92 50 L83 43 V57 Z" fill="currentColor"/><path d="M22 50 H78" stroke="currentColor" stroke-width="1.5" opacity="0.5"/></svg>';
 // stick x (-1..1, knob offset / travel) -> steering fraction: dead zone, then a gentle curve
 export const STEER_DEAD = 0.08, STEER_POW = 1.6;
-export function steerCurve(x) {
+export function steerCurve(x, dead = STEER_DEAD) {   // js/gamepad.js passes its own dead zone (0.12)
   const a = Math.abs(x);
-  if (a <= STEER_DEAD) return 0;
-  return Math.sign(x) * Math.min(1, (a - STEER_DEAD) / (1 - STEER_DEAD)) ** STEER_POW;
+  if (a <= dead) return 0;
+  return Math.sign(x) * Math.min(1, (a - dead) / (1 - dead)) ** STEER_POW;
 }
 
 export function createTouch({ balloon = () => null, paused = () => false, onBlock = () => {}, setSteer = () => {},

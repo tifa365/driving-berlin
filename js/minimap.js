@@ -745,6 +745,10 @@ export function createMinimap({ level, base, isWater = null, onOverview = null, 
   return {
     update, loaded, setVisible: setOn, get visible() { return on; },
     setOverview, get overview() { return ovOn; }, setDriving, get driving() { return driving; },
+    // overview by a game controller (js/gamepad.js): pan by screen px, zoom about the centre, re-centre on the car
+    pan(dx, dy) { if (!ovOn) return; ovV.x += dx / ovV.s; ovV.z += dy / ovV.s; follow = false; ovClamp(); ovRequest(); },
+    zoom(f) { if (ovOn) zoomAt(f); },
+    recentre() { if (!ovOn) return; ovV.x = lastPos.x; ovV.z = lastPos.z; follow = true; ovClamp(); ovRequest(); },
     get street() { return curName >= 0 ? map.names[curName] : ''; }, get near() { return nearTxt; },
     get streetKind() { return curName >= 0 ? curKind : ''; },   // OSM highway class of that street (js/areasign.js street plate)
     get map() { return map; }, canvas: cv, tiles,

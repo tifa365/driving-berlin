@@ -104,6 +104,7 @@ test API). The modules:
 | `js/menu.js` | Esc menu: pages, slow motion into the pause | `menu`, `paused` |
 | `js/intro.js` | Shared help texts: key list, ways to play, `DATASETS` / `SOFTWARE` credits | — |
 | `js/touch.js` | Touch controls: left stick steers analog (`analog.steer` → `vehicle.setSteeringTarget`, horizontal part only), gas / back buttons and jump / map / balloon dispatch the same key events as the keyboard; portrait blocker (pause reason `rotate`) | — |
+| `js/gamepad.js` | Game controllers (Gamepad API, polled at the top of `frame()`): left stick / d-pad steer through `analog.steer`, triggers through `analog.gas` / `analog.brake` (fractional `setThrottle` / `setBrake`); other buttons send the keyboard's key events; menu and map navigation; a resting pad never overrides keys; `inject(getPads)` for tests | `gamepad` |
 | `js/site.js` | Optional `site.json` of the published copy: tile URL, gzipped `.bin` | — |
 
 Other useful API members: `state()`, `steps(n, keys)`, `simulate(s, keys)`, `teleport(x, z, h)`,
@@ -205,8 +206,16 @@ R, teleport and the map drop all modes; a mood switch keeps them.
 
 **Sequences and pause.** Scripted moments are `sinking.kind` values: `water`, `pit`, `nodrive`,
 `sbahn`, `sbahnOut`, `roofUp`, `roofDown`, `roofFall`. Pause is a set of reasons, `pauseBy`
-(`load`, `menu`, `map`); with any reason set no game key works, and when the last one is released
-the frame clock restarts (no big dt). Opening the menu eases game time 1 → 0 over 0.35 s while
+(`load`, `menu`, `map`, `rotate` = phone held upright); with any reason set no game key works, and when the last one is released
+the frame clock restarts (no big dt).
+
+**Input.** Keys enter the `keys` set (`driveKey` maps W A S D to the arrow names). Next to it,
+`analog = { steer, gas, brake }` (index.html input section): while `steer` is not 0, `stepOnce`
+calls `vehicle.setSteeringTarget(steer)` instead of the key lever; while `gas` or `brake` is not 0,
+both pedals come from it as fractions instead of the keys. Writers: the touch stick (`js/touch.js`,
+steer only) and game controllers (`js/gamepad.js`, which writes a channel only when the pad's value
+changes, and yields to a real key press until it moves clearly again: last input wins). Every
+pause clears `keys` and `analog`. Jump, map, menu and the rest always go through key events. Opening the menu eases game time 1 → 0 over 0.35 s while
 the canvas blurs (`MENU_FX` in `js/menu.js`; reduced motion = instant). Every module's
 `update(dt)` gets the scaled dt.
 
