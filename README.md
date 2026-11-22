@@ -225,7 +225,7 @@ Controls: arrows or W A S D drive (hold down at standstill = reverse), V head-up
 
 **Help texts (`js/intro.js`):** the key list / touch layout (menu "Steuerung"), the two ways to play and the credits (menu "Info", loading screen) live here as shared pieces; there is no start screen any more.
 
-**Speed (panorama drive):** the Tempo row in the settings (30 / 50 / 70 / frei) sets the top speed (default 50 km/h, saved as `berlinDrive.speedLimit`; `?maxspeed=` overrides without saving, `berlinDrive.speedLimit = 30` from the console, 0 = free = the old engine up to 160 km/h).
+**Speed (panorama drive):** the Tempo row in the settings (30 / 50 / 70 / frei) sets the top speed (default 70 km/h, saved as `berlinDrive.speedLimit`; `?maxspeed=` overrides without saving, `berlinDrive.speedLimit = 30` from the console, 0 = free = the old engine up to 160 km/h).
 A governor in `js/vehicle.js` holds it for car and bus, both handlings, on ice too: calm 2.8 m/s2 pull, the push fades over the last ~10 km/h (0-50 in ~6 s, no overshoot), gentle braking downhill or after a jump; reverse has the same limit as forwards.
 
 **Vehicle:** the Fahrzeug row in the settings (Rot / Blau / Gelb / Grün / Orange / Lila / Bus) swaps the vehicle in place (same spot, heading and speed) and is saved as `berlinDrive.vehicle` (`car:<paint>` or `bus`); B toggles car/bus and moves the menu with it. Paints are saturated mid-tones that read in every mood (no white/grey for snow, no black/navy for night). Ignored while the Rettungsbär is at work; works on the S-Bahn deck, in tunnels, in mid-air and during a balloon ride. A mood switch keeps the vehicle.

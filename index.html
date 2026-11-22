@@ -376,7 +376,7 @@ const MAX_VEHICLE_SPEED_KMH = 160;
 // "Speed" dropdown, saved as localStorage 'berlinDrive.speedLimit'; ?maxspeed= overrides
 // (not saved). Applied by the vehicle's governor (js/vehicle.js); reverse has the same limit.
 const SPEED_CHOICES = [30, 50, 70, 0];
-let speedLimitKmh = 50;
+let speedLimitKmh = 70;   // standard (owner 2026-11-22; was 50)
 try { const v = params.get('maxspeed') ?? localStorage.getItem('berlinDrive.speedLimit'); if (v != null && isFinite(+v) && +v >= 0) speedLimitKmh = +v; } catch { /* no storage */ }
 function applySpeedLimit() {
   if (!vehicle) return;
