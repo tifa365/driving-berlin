@@ -1,15 +1,13 @@
 # Driving Berlin
 
-![Driving Berlin: the car on Unter den Linden](docs/screenshot-unter-den-linden.png)
-
 A calm drive through the real, photographed Berlin-Mitte, in the browser. The city is Berlin's
 photogrammetric 3D mesh, streamed as you drive; it is not a racing game, there is no clock and
 no score to chase.
 
-**Play: <https://tifa365.github.io/driving-berlin/>**
-
-> The game loads about 70 MB to start and more data while driving. Best used on Wi-Fi and on a
-> computer, to save data.
+> **Not playable online (since 2026-11-25).** The public copy of the game and the hosted mesh
+> tiles were taken offline: the terms of use of the 3D mesh do not permit redistributing it.
+> This repository holds the game's code only. To run it you need your own copy of the mesh from
+> its provider (see "Licence and credits") and the level files built from it.
 
 The game's texts are in German.
 
@@ -60,14 +58,10 @@ What works out of the box, and what does not:
 - **The level data (`levels/mitte_all/`) and the mesh tiles are not in this repository.** A plain
   clone serves the code, but the game stops on its loading screen because the level files are
   missing.
-- **Quickest local copy:** the `gh-pages` branch is the published site, with the level data in it;
-  its tiles come from the Hugging Face dataset `driving-berlin-tiles`. Serve it with any static
-  server:
-  ```bash
-  git clone --branch gh-pages https://github.com/tifa365/driving-berlin driving-berlin-site
-  cd driving-berlin-site && python3 -m http.server 8000
-  ```
-- **Developing with local tiles:** `serve.py` serves the mesh tiles under `/tiles/` from
+- **There is no ready-made copy to download.** The published site (formerly the `gh-pages`
+  branch) and the hosted tile dataset no longer exist; neither the mesh tiles nor the level files
+  derived from the mesh are distributed by this project.
+- **Running with your own tiles:** `serve.py` serves the mesh tiles under `/tiles/` from
   `../berlin_mesh_2025_wab/` next to this folder, and the build scripts expect the parent
   project's helper modules and an OpenStreetMap extract. See [AGENTS.md](AGENTS.md) for the full
   setup and the build order.

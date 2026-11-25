@@ -13,8 +13,9 @@ this file is the map of the code, the rules and the procedures. Code comments th
 - The mesh is never merged: `js/stream.js` streams the 3D Tiles (`.b3dm`, L1 finest ... L4 roots).
   Collision, heights and everything else come from level files in `levels/mitte_all/`, built
   offline by the `build_*.py` scripts from the mesh, OpenStreetMap and two Berlin WFS datasets.
-- Live: GitHub Pages (`gh-pages` branch) for the code and level files; the tiles are the Hugging
-  Face dataset `driving-berlin-tiles`.
+- Not live (owner, 2026-11-25): the GitHub Pages site (`gh-pages` branch) and the Hugging Face
+  dataset `driving-berlin-tiles` were taken offline, because the mesh's terms of use do not permit
+  redistribution. Do not publish the site, the tiles or level files derived from the mesh.
 - This folder is its own git repository, nested in (and ignored by) the parent mesh project. Build
   scripts import `merge_tiles`, `merge_hybrid`, `osm_semantic` (and `build_level.py` also
   `merge_lod2`) from the parent folder and read the mesh mirror `../berlin_mesh_2025_wab/`. Keep
@@ -348,6 +349,11 @@ coast-down, map driving, default settings on a fresh profile, `newGame()` / `res
 - Not tested on purpose: how things look, and phones. `PLAYTEST.md` lists what to check by eye.
 
 ## 8. Publishing
+
+**Suspended (owner, 2026-11-25): do not publish.** The mesh's terms of use do not permit
+redistributing the tiles or data derived from them; the site and the tile dataset were taken
+offline. Do not run `tools/publish_site.py` for a public copy and do not upload tiles. The steps
+below are kept as a record of how it was done.
 
 **First `tools/test.sh` must exit 0.** Then:
 
